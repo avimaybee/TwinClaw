@@ -24,6 +24,8 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/whatsapp_dispatcher_20260220/](./archive/whatsapp_dispatcher_20260220/)*
 - [x] **Track 9: MCP Skill Registry & External Server Integrations**
   *Link: [./archive/mcp_skill_registry_20260220/](./archive/mcp_skill_registry_20260220/)*
+- [x] **Track 11: Control Plane HTTP API & Webhook Callback Layer**
+  *Link: [./archive/control_plane_api_endpoints_20260220/](./archive/control_plane_api_endpoints_20260220/)*
 
 ---
 
@@ -31,8 +33,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [~] **Track 10: Multi-Agent Orchestration & Delegation Runtime** _(Assigned: Copilot / Lead Agent — highest complexity)_
   *Link: [./tracks/multi_agent_orchestration_20260220/](./tracks/multi_agent_orchestration_20260220/)*
-- [x] **Track 11: Control Plane HTTP API & Webhook Callback Layer** _(Assigned: Agent 2)_
-  *Link: [./tracks/control_plane_api_endpoints_20260220/](./tracks/control_plane_api_endpoints_20260220/)*
+
 - [~] **Track 12: Reliability, Replay Evaluation & Guardrail Test Harness** _(Assigned: Agent 3)_
   *Link: [./tracks/reliability_evaluation_harness_20260220/](./tracks/reliability_evaluation_harness_20260220/)*
 
