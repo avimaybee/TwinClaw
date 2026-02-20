@@ -53,6 +53,10 @@ memory/
 
 # Deployment & Runtime Temp
 tmpclaude?*
+
+# Runtime artifacts (generated at runtime, not source)
+memory/mvp-gate/
+memory/release-pipeline/
 # If you use Railway or Vercel, consider:
 # .railway/
 # .vercel/

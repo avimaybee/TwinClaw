@@ -16,7 +16,9 @@
     "test:release": "vitest run tests/harness/release-pipeline.spec.ts",
     "release:preflight": "tsx src/release/cli.ts preflight",
     "release:prepare": "tsx src/release/cli.ts prepare",
-    "release:rollback": "tsx src/release/cli.ts rollback"
+    "release:rollback": "tsx src/release/cli.ts rollback",
+    "mvp:gate": "tsx src/release/mvp-gate-cli.ts",
+    "mvp:gate:local": "tsx src/release/mvp-gate-cli.ts --skip-health"
   },
   "keywords": [],
   "author": "",
