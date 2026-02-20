@@ -1,9 +1,17 @@
 import { config } from 'dotenv-vault';
 config();
 import { runOnboarding, startBasicREPL } from './core/onboarding.js';
+import { Gateway } from './core/gateway.js';
 import { HeartbeatService } from './core/heartbeat.js';
+import { Dispatcher } from './interfaces/dispatcher.js';
+import { TelegramHandler } from './interfaces/telegram_handler.js';
 import { FileWatcherService } from './services/file-watcher.js';
 import { ProactiveNotifier } from './services/proactive-notifier.js';
+import { SkillRegistry } from './services/skill-registry.js';
+import { McpServerManager } from './services/mcp-server-manager.js';
+import { createBuiltinSkills } from './skills/builtin.js';
+import { SttService } from './services/stt-service.js';
+import { TtsService } from './services/tts-service.js';
 import { logThought } from './utils/logger.js';
 import path from 'node:path';
 
@@ -36,20 +44,56 @@ fileWatcher.addTarget({
     exclude: ['**/*.db', '**/*.db-journal'],
 });
 
+// ── Gateway & Interface Dispatcher ────────────────────────────────────────────
+
+const gateway = new Gateway();
+const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+const telegramUserId = process.env.TELEGRAM_USER_ID;
+const groqApiKey = process.env.GROQ_API_KEY;
+const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
+
+let dispatcher: Dispatcher | null = null;
+
+if (
+    telegramBotToken &&
+    telegramUserId &&
+    groqApiKey &&
+    elevenLabsApiKey &&
+    elevenLabsVoiceId
+) {
+    const parsedTelegramUserId = Number(telegramUserId);
+    if (!Number.isInteger(parsedTelegramUserId)) {
+        console.error('[TwinClaw] TELEGRAM_USER_ID must be a valid integer.');
+    } else {
+        const telegramHandler = new TelegramHandler(telegramBotToken, parsedTelegramUserId);
+        const sttService = new SttService(groqApiKey);
+        const ttsService = new TtsService(elevenLabsApiKey, elevenLabsVoiceId);
+        dispatcher = new Dispatcher(telegramHandler, undefined, sttService, ttsService, gateway);
+        void logThought('[TwinClaw] Messaging dispatcher initialized.');
+    }
+} else {
+    console.log(
+        '[TwinClaw] Messaging dispatcher not initialized (missing TELEGRAM_BOT_TOKEN, TELEGRAM_USER_ID, GROQ_API_KEY, ELEVENLABS_API_KEY, or ELEVENLABS_VOICE_ID).',
+    );
+}
+
 // ── Proactive Notifier ─────────────────────────────────────────────────────
 
-const telegramUserId = process.env.TELEGRAM_USER_ID;
 const proactiveEnabled = !!telegramUserId;
 
 const notifier = new ProactiveNotifier(
     async (target, text) => {
-        // Lightweight inline send — the Dispatcher is only constructed when
-        // Telegram is fully initialized. For proactive messages originating
-        // from background services, we send directly via the Telegram handler
-        // import path to avoid circular dependencies.
-        // In a full deployment, this would route through the Dispatcher.
+        if (dispatcher) {
+            await dispatcher.sendProactive(target.platform, target.chatId, text);
+            await logThought(`[Proactive] Delivered message to ${target.platform}:${target.chatId}`);
+            return;
+        }
+
         console.log(`[Proactive → ${target.platform}:${target.chatId}] ${text}`);
-        await logThought(`[Proactive] Delivered message to ${target.platform}:${target.chatId}`);
+        await logThought(
+            `[Proactive] Dispatcher unavailable; message logged for ${target.platform}:${target.chatId}`,
+        );
     },
     {
         platform: 'telegram',
@@ -77,18 +121,50 @@ void fileWatcher.startAll().catch((err) => {
     console.error('[TwinClaw] Failed to start file watchers:', err);
 });
 
+// ── MCP Skill Registry & Server Manager ──────────────────────────────────────
+
+const skillRegistry = new SkillRegistry();
+skillRegistry.registerMany(createBuiltinSkills());
+
+const mcpManager = new McpServerManager(skillRegistry);
+
+void (async () => {
+    try {
+        await mcpManager.loadConfig();
+        await mcpManager.connectAll();
+
+        const summary = skillRegistry.summary();
+        const servers = mcpManager.listServers();
+        const connectedCount = servers.filter((s) => s.state === 'connected').length;
+
+        console.log(
+            `[TwinClaw MCP] ${connectedCount}/${servers.length} servers connected | ` +
+            `${summary.builtin ?? 0} builtin + ${summary.mcp ?? 0} MCP skills registered.`,
+        );
+        await logThought(
+            `[MCP] Initialized: ${connectedCount} servers, ${summary.mcp ?? 0} MCP tools, ${summary.builtin ?? 0} builtins.`,
+        );
+    } catch (err) {
+        console.error('[TwinClaw MCP] Initialization failed:', err);
+    }
+})();
+
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 
 process.on('SIGINT', () => {
     heartbeat.stop();
+    dispatcher?.shutdown();
     void fileWatcher.stopAll();
+    void mcpManager.disconnectAll();
     void logThought('TwinClaw process received SIGINT; services stopped.');
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
     heartbeat.stop();
+    dispatcher?.shutdown();
     void fileWatcher.stopAll();
+    void mcpManager.disconnectAll();
     void logThought('TwinClaw process received SIGTERM; services stopped.');
     process.exit(0);
 });
@@ -98,5 +174,5 @@ process.on('SIGTERM', () => {
 if (process.argv.includes('--onboard')) {
     runOnboarding().catch(console.error);
 } else {
-    startBasicREPL();
+    startBasicREPL(gateway);
 }

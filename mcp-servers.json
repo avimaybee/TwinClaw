@@ -1,0 +1,179 @@
+{
+    "servers": [
+        {
+            "id": "filesystem",
+            "name": "Filesystem",
+            "description": "Read, write, and manage local files and directories securely.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "."
+            ],
+            "autoConnect": true,
+            "enabled": true
+        },
+        {
+            "id": "memory",
+            "name": "Memory (Knowledge Graph)",
+            "description": "Persistent knowledge graph for long-term factual memory and entity relationships.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-memory"
+            ],
+            "autoConnect": true,
+            "enabled": true
+        },
+        {
+            "id": "brave-search",
+            "name": "Brave Search",
+            "description": "Web and local search via Brave Search API for real-time information retrieval.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-brave-search"
+            ],
+            "env": {
+                "BRAVE_API_KEY": ""
+            },
+            "autoConnect": false,
+            "enabled": false
+        },
+        {
+            "id": "github",
+            "name": "GitHub",
+            "description": "Interact with GitHub repositories, issues, pull requests, and code management.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-github"
+            ],
+            "env": {
+                "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+            },
+            "autoConnect": false,
+            "enabled": false
+        },
+        {
+            "id": "puppeteer",
+            "name": "Puppeteer (Browser Automation)",
+            "description": "Control a Chromium browser for web scraping, screenshots, and automated UI interaction.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-puppeteer"
+            ],
+            "autoConnect": false,
+            "enabled": true
+        },
+        {
+            "id": "sequential-thinking",
+            "name": "Sequential Thinking",
+            "description": "Structured, step-by-step reasoning and problem decomposition for complex tasks.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-sequential-thinking"
+            ],
+            "autoConnect": true,
+            "enabled": true
+        },
+        {
+            "id": "sqlite",
+            "name": "SQLite",
+            "description": "Query and manage SQLite databases with schema inspection and analysis capabilities.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-sqlite",
+                "--db-path",
+                "./memory/twinclaw.db"
+            ],
+            "autoConnect": false,
+            "enabled": true
+        },
+        {
+            "id": "postgres",
+            "name": "PostgreSQL",
+            "description": "Connect to PostgreSQL databases for data querying and schema analysis.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-postgres"
+            ],
+            "env": {
+                "POSTGRES_CONNECTION_STRING": ""
+            },
+            "autoConnect": false,
+            "enabled": false
+        },
+        {
+            "id": "slack",
+            "name": "Slack",
+            "description": "Send messages, read channels, and manage Slack workspace interactions.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-slack"
+            ],
+            "env": {
+                "SLACK_BOT_TOKEN": "",
+                "SLACK_TEAM_ID": ""
+            },
+            "autoConnect": false,
+            "enabled": false
+        },
+        {
+            "id": "google-maps",
+            "name": "Google Maps",
+            "description": "Geocoding, directions, place search, and distance calculations via Google Maps API.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-google-maps"
+            ],
+            "env": {
+                "GOOGLE_MAPS_API_KEY": ""
+            },
+            "autoConnect": false,
+            "enabled": false
+        },
+        {
+            "id": "fetch",
+            "name": "Fetch (HTTP)",
+            "description": "Make HTTP requests to external APIs and web resources with content extraction.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-fetch"
+            ],
+            "autoConnect": true,
+            "enabled": true
+        },
+        {
+            "id": "everything",
+            "name": "Everything (Test Server)",
+            "description": "Reference MCP server implementing all protocol features — for testing and debugging.",
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-everything"
+            ],
+            "autoConnect": false,
+            "enabled": false
+        }
+    ]
+}
