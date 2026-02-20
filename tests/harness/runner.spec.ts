@@ -22,7 +22,9 @@ describe('Replay Harness Execution Runner', () => {
         process.env.OPENROUTER_API_KEY = 'test_openrouter_key';
         process.env.GEMINI_API_KEY = 'test_gemini_key';
 
-        mockRouter = new MockModelRouter();
+        // Use aggressive_fallback to prevent DB-persisted intelligent_pacing from
+        // causing 5-second waits on 429 responses and cascading test failures.
+        mockRouter = new MockModelRouter({ fallbackMode: 'aggressive_fallback' });
         registry = new SkillRegistry();
         policyEngine = new PolicyEngine();
         // Keep it self-contained for testing scenarios by adding built-ins
@@ -268,6 +270,8 @@ describe('Delegation DAG Runtime', () => {
 
     const buildRequest = (briefs: DelegationBrief[]): DelegationRequest => {
         const sessionId = `test:dag:${randomUUID()}`;
+        // Fixture invariant: session row must exist BEFORE orchestration_jobs rows
+        // are inserted (FK: orchestration_jobs.session_id -> sessions.session_id).
         createSession(sessionId);
 
         return {

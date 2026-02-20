@@ -57,3 +57,4 @@ tmpclaude?*
 .env.example
 GEMINI.md
 .gemini
+memory/
