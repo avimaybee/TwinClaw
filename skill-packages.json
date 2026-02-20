@@ -1,0 +1,92 @@
+{
+  "packages": [
+    {
+      "name": "filesystem",
+      "version": "1.0.0",
+      "metadata": {
+        "displayName": "Filesystem MCP Skill Pack",
+        "description": "Local filesystem operations through MCP."
+      },
+      "dependencies": {},
+      "compatibility": {
+        "node": ">=22.0.0",
+        "runtimeApi": "^1.0.0",
+        "requiredTools": [
+          "npx"
+        ]
+      },
+      "server": {
+        "id": "filesystem",
+        "name": "Filesystem",
+        "description": "Read, write, and manage local files and directories securely.",
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "."
+        ],
+        "autoConnect": true,
+        "enabled": true
+      }
+    },
+    {
+      "name": "fetch",
+      "version": "1.0.0",
+      "metadata": {
+        "displayName": "Fetch MCP Skill Pack",
+        "description": "HTTP request and web resource retrieval skills."
+      },
+      "dependencies": {},
+      "compatibility": {
+        "node": ">=22.0.0",
+        "runtimeApi": "^1.0.0",
+        "requiredTools": [
+          "npx"
+        ]
+      },
+      "server": {
+        "id": "fetch",
+        "name": "Fetch (HTTP)",
+        "description": "Make HTTP requests to external APIs and web resources with content extraction.",
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-fetch"
+        ],
+        "autoConnect": true,
+        "enabled": true
+      }
+    },
+    {
+      "name": "sequential-thinking",
+      "version": "1.0.0",
+      "metadata": {
+        "displayName": "Sequential Thinking MCP Skill Pack",
+        "description": "Structured decomposition and reasoning assistant tools."
+      },
+      "dependencies": {},
+      "compatibility": {
+        "node": ">=22.0.0",
+        "runtimeApi": "^1.0.0",
+        "requiredTools": [
+          "npx"
+        ]
+      },
+      "server": {
+        "id": "sequential-thinking",
+        "name": "Sequential Thinking",
+        "description": "Structured, step-by-step reasoning and problem decomposition for complex tasks.",
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking"
+        ],
+        "autoConnect": true,
+        "enabled": true
+      }
+    }
+  ]
+}

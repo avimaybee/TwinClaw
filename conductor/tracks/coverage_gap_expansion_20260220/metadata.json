@@ -1,0 +1,8 @@
+{
+  "track_id": "coverage_gap_expansion_20260220",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-02-20T17:17:40Z",
+  "updated_at": "2026-02-20T17:17:40Z",
+  "description": "Add deterministic tests for messaging, MCP, proactive execution, and observability coverage gaps."
+}

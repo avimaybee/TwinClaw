@@ -1,0 +1,8 @@
+{
+  "track_id": "test_fk_unblock_20260220",
+  "type": "bug",
+  "status": "new",
+  "created_at": "2026-02-20T17:17:40Z",
+  "updated_at": "2026-02-20T17:17:40Z",
+  "description": "Repair orchestration runner harness FK fixture ordering so test suites execute reliably."
+}

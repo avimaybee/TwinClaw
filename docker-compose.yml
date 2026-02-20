@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  twinclaw:
+    build: .
+    container_name: twinclaw-agent
+    restart: always
+    ports:
+      - "18789:18789"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./memory:/app/src/memory
+    env_file:
+      - .env

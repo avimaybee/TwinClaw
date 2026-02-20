@@ -1,0 +1,14 @@
+{
+  "ui": {
+    "inlineThinkingMode": "off",
+    "showStatusInTitle": true,
+    "footer": {
+      "hideContextPercentage": false
+    },
+    "showMemoryUsage": true,
+    "showModelInfoInChat": true
+  },
+  "security": {
+    "enablePermanentToolApproval": true
+  }
+}

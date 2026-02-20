@@ -9,6 +9,18 @@ import type {
 } from '../types/mcp.js';
 import { logThought } from '../utils/logger.js';
 import type { SkillRegistry } from './skill-registry.js';
+import { saveMcpHealthEvent, saveMcpScopeAuditLog } from './db.js';
+import { randomUUID } from 'node:crypto';
+
+const FAILURE_THRESHOLD = 5;
+const COOLDOWN_MS = 30_000; // 30 seconds
+const SUCCESS_THRESHOLD = 2; // 2 consecutive successes to close half-open
+
+// Symbols for testing access
+export const INTERNAL_STATE = Symbol('INTERNAL_STATE');
+export const INTERNAL_METRICS = Symbol('INTERNAL_METRICS');
+export const INTERNAL_CLIENT = Symbol('INTERNAL_CLIENT');
+export const INTERNAL_CONVERT = Symbol('INTERNAL_CONVERT');
 
 /**
  * Manages the lifecycle of a single MCP server connection.
@@ -27,6 +39,32 @@ export class McpClientAdapter {
     #state: McpConnectionState = 'disconnected';
     #lastError: string | null = null;
     #toolCount = 0;
+
+    // Health tracking
+    #circuitState: 'closed' | 'open' | 'half-open' = 'closed';
+    #metrics = {
+        failureCount: 0,
+        latencySpikes: 0,
+        timeoutCount: 0,
+        lastFailureTime: null as string | null,
+        consecutiveSuccesses: 0,
+    };
+
+    /** @internal Exposure for tests only */
+    get [INTERNAL_STATE]() { return this.#circuitState; }
+    set [INTERNAL_STATE](v: 'closed' | 'open' | 'half-open') { this.#circuitState = v; }
+
+    /** @internal Exposure for tests only */
+    get [INTERNAL_METRICS]() { return this.#metrics; }
+
+    /** @internal Exposure for tests only */
+    get [INTERNAL_CLIENT]() { return this.#client; }
+
+    /** @internal Exposure for tests only */
+    [INTERNAL_CONVERT](name: string, desc: string, schema: unknown) {
+        return this.#convertToSkill(name, desc, schema);
+    }
+
 
     constructor(config: McpServerConfig, registry: SkillRegistry) {
         this.#config = config;
@@ -49,6 +87,21 @@ export class McpClientAdapter {
             state: this.#state,
             toolCount: this.#toolCount,
             lastError: this.#lastError,
+            health: this.#healthSnapshot(),
+        };
+    }
+
+    #healthSnapshot() {
+        let remainingCooldown = 0;
+        if (this.#circuitState === 'open' && this.#metrics.lastFailureTime) {
+            const lastFail = new Date(this.#metrics.lastFailureTime).getTime();
+            remainingCooldown = Math.max(0, COOLDOWN_MS - (Date.now() - lastFail));
+        }
+
+        return {
+            state: this.#circuitState,
+            metrics: { ...this.#metrics },
+            remainingCooldownMs: remainingCooldown,
         };
     }
 
@@ -134,22 +187,40 @@ export class McpClientAdapter {
             `[McpClientAdapter] Calling tool '${toolName}' on MCP server '${this.#config.id}'.`,
         );
 
-        const result = await this.#client.callTool({ name: toolName, arguments: args });
-
-        // MCP tool results come as an array of content blocks
-        const content = result.content;
-        if (Array.isArray(content)) {
-            return content
-                .map((block) => {
-                    if (typeof block === 'object' && block !== null && 'text' in block) {
-                        return String(block.text);
-                    }
-                    return JSON.stringify(block);
-                })
-                .join('\n');
+        // Check circuit state before execution
+        this.#checkCircuitTransition();
+        if (this.#circuitState === 'open') {
+            throw new Error(
+                `MCP server '${this.#config.id}' is unavailable (Circuit OPEN). Failure count: ${this.#metrics.failureCount}`,
+            );
         }
 
-        return typeof content === 'string' ? content : JSON.stringify(content);
+        const start = Date.now();
+        try {
+            const result = await this.#client.callTool({ name: toolName, arguments: args });
+            const latency = Date.now() - start;
+
+            this.#recordSuccess(latency);
+
+            // MCP tool results come as an array of content blocks
+            const content = result.content;
+            if (Array.isArray(content)) {
+                return content
+                    .map((block) => {
+                        if (typeof block === 'object' && block !== null && 'text' in block) {
+                            return String(block.text);
+                        }
+                        return JSON.stringify(block);
+                    })
+                    .join('\n');
+            }
+
+            const output = typeof content === 'string' ? content : JSON.stringify(content);
+            return output;
+        } catch (err) {
+            this.#recordFailure(err);
+            throw err;
+        }
     }
 
     // ── Private Helpers ────────────────────────────────────────────────────────
@@ -178,12 +249,17 @@ export class McpClientAdapter {
         const serverId = this.#config.id;
         const adapter = this; // Capture reference for the closure
 
+        const defaultScope = this.#config.capabilities?.defaultScope ?? 'unclassified';
+        const mcpScope = this.#config.capabilities?.tools?.[name] ?? defaultScope;
+
         return {
             name,
             description: `[MCP:${serverId}] ${description}`,
             parameters: (inputSchema as JsonSchema) ?? undefined,
             source: 'mcp',
             serverId,
+            mcpScope,
+            adapter,
             async execute(input: Record<string, unknown>) {
                 try {
                     const output = await adapter.callTool(name, input);
@@ -194,5 +270,110 @@ export class McpClientAdapter {
                 }
             },
         };
+    }
+
+    /** Audit a scope-blocked action. */
+    auditScopeBlock(sessionId: string | null, toolName: string, scope: string, reason: string): void {
+        saveMcpScopeAuditLog({
+            id: randomUUID(),
+            sessionId,
+            serverId: this.#config.id,
+            toolName,
+            scope,
+            outcome: 'denied',
+            reason,
+        });
+    }
+
+    /** Audit a scope-allowed action. */
+    auditScopeAllow(sessionId: string | null, toolName: string, scope: string): void {
+        saveMcpScopeAuditLog({
+            id: randomUUID(),
+            sessionId,
+            serverId: this.#config.id,
+            toolName,
+            scope,
+            outcome: 'allowed',
+        });
+    }
+
+    #checkCircuitTransition(): void {
+        if (this.#circuitState === 'open' && this.#metrics.lastFailureTime) {
+            const lastFail = new Date(this.#metrics.lastFailureTime).getTime();
+            if (Date.now() - lastFail > COOLDOWN_MS) {
+                const prevState = this.#circuitState;
+                this.#circuitState = 'half-open';
+
+                saveMcpHealthEvent({
+                    id: randomUUID(),
+                    serverId: this.#config.id,
+                    prevState,
+                    newState: this.#circuitState,
+                    reason: 'Cooldown expired',
+                    metrics: { ...this.#metrics },
+                });
+
+                logThought(
+                    `[McpClientAdapter] Circuit for '${this.#config.id}' transitioned to HALF-OPEN (cooldown expired).`,
+                ).catch(() => { });
+            }
+        }
+    }
+
+    #recordSuccess(latencyMs: number): void {
+        this.#metrics.consecutiveSuccesses++;
+
+        // Latency spikes (> 10s)
+        if (latencyMs > 10_000) {
+            this.#metrics.latencySpikes++;
+        }
+
+        if (this.#circuitState === 'half-open' && this.#metrics.consecutiveSuccesses >= SUCCESS_THRESHOLD) {
+            const prevState = this.#circuitState;
+            this.#circuitState = 'closed';
+            this.#metrics.failureCount = 0; // Reset failures on full recovery
+
+            saveMcpHealthEvent({
+                id: randomUUID(),
+                serverId: this.#config.id,
+                prevState,
+                newState: this.#circuitState,
+                reason: 'Success threshold reached in half-open state',
+                metrics: { ...this.#metrics },
+            });
+
+            logThought(
+                `[McpClientAdapter] Circuit for '${this.#config.id}' transitioned to CLOSED (full recovery achieved).`,
+            ).catch(() => { });
+        }
+    }
+
+    #recordFailure(err: unknown): void {
+        this.#metrics.failureCount++;
+        this.#metrics.lastFailureTime = new Date().toISOString();
+        this.#metrics.consecutiveSuccesses = 0;
+
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.toLowerCase().includes('timeout')) {
+            this.#metrics.timeoutCount++;
+        }
+
+        if (this.#circuitState !== 'open' && this.#metrics.failureCount >= FAILURE_THRESHOLD) {
+            const prevState = this.#circuitState;
+            this.#circuitState = 'open';
+
+            saveMcpHealthEvent({
+                id: randomUUID(),
+                serverId: this.#config.id,
+                prevState,
+                newState: this.#circuitState,
+                reason: `Failure threshold reached: ${message}`,
+                metrics: { ...this.#metrics },
+            });
+
+            logThought(
+                `[McpClientAdapter] Circuit for '${this.#config.id}' transitioned to OPEN (failure threshold ${FAILURE_THRESHOLD} reached). Last error: ${message}`,
+            ).catch(() => { });
+        }
     }
 }

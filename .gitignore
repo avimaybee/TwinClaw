@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment & Secret Vault
+.env
+.env.*
+!.env.example
+.env.vault
+
+# Test & Coverage
+coverage/
+test-results.json
+vitest-result*.json
+
+# IDE & OS
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build & Cache
+.npm/
+.pnpm-store/
+.vite/
+.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Database (SQLite)
+*.db
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Deployment & Runtime Temp
+tmpclaude?*
+# If you use Railway or Vercel, consider:
+# .railway/
+# .vercel/
+
+.env
+.env.example
+GEMINI.md
+.gemini

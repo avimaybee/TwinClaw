@@ -1,15 +1,18 @@
 import type { Request, Response, NextFunction } from 'express';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { ApiEnvelope } from '../types/api.js';
-import { logThought } from '../utils/logger.js';
+import { logThought, scrubSensitiveText } from '../utils/logger.js';
+import { getSecretVaultService } from '../services/secret-vault.js';
 
 // ── Response Helpers ────────────────────────────────────────────────────────
 
 /** Send a successful JSON response using the standard envelope. */
 export function sendOk<T>(res: Response, data: T, status = 200): void {
+    const correlationId = res.locals.correlationId as string | undefined;
     const body: ApiEnvelope<T> = {
         ok: true,
         data,
+        correlationId,
         timestamp: new Date().toISOString(),
     };
     res.status(status).json(body);
@@ -17,17 +20,18 @@ export function sendOk<T>(res: Response, data: T, status = 200): void {
 
 /** Send an error JSON response using the standard envelope. */
 export function sendError(res: Response, message: string, status = 400): void {
+    const correlationId = res.locals.correlationId as string | undefined;
+    const redactedMessage = scrubSensitiveText(message);
     const body: ApiEnvelope = {
         ok: false,
-        error: message,
+        error: redactedMessage,
+        correlationId,
         timestamp: new Date().toISOString(),
     };
     res.status(status).json(body);
 }
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────
-
-const API_SECRET = process.env.API_SECRET ?? '';
 
 /**
  * Validate the `X-Signature` header on incoming webhook callbacks.
@@ -37,7 +41,9 @@ const API_SECRET = process.env.API_SECRET ?? '';
  * If API_SECRET is not configured, all callback requests are rejected.
  */
 export function requireSignature(req: Request, res: Response, next: NextFunction): void {
-    if (!API_SECRET) {
+    const apiSecret = getSecretVaultService().readSecret('API_SECRET') ?? '';
+
+    if (!apiSecret) {
         void logThought('[API] Webhook rejected — API_SECRET not configured.');
         sendError(res, 'Webhook endpoint not configured (missing API_SECRET).', 503);
         return;
@@ -52,7 +58,7 @@ export function requireSignature(req: Request, res: Response, next: NextFunction
 
     const providedHex = signatureHeader.slice('sha256='.length);
     const rawBody = JSON.stringify(req.body);
-    const expectedHex = createHmac('sha256', API_SECRET).update(rawBody).digest('hex');
+    const expectedHex = createHmac('sha256', apiSecret).update(rawBody).digest('hex');
 
     const provided = Buffer.from(providedHex, 'hex');
     const expected = Buffer.from(expectedHex, 'hex');
@@ -72,20 +78,22 @@ export function requireSignature(req: Request, res: Response, next: NextFunction
 export function mapError(err: unknown): { status: number; message: string } {
     if (err instanceof Error) {
         if (err.message.includes('not initialized') || err.message.includes('not connected')) {
-            return { status: 503, message: err.message };
+            return { status: 503, message: scrubSensitiveText(err.message) };
         }
-        return { status: 500, message: err.message };
+        return { status: 500, message: scrubSensitiveText(err.message) };
     }
-    return { status: 500, message: String(err) };
+    return { status: 500, message: scrubSensitiveText(String(err)) };
 }
 
 // ── Logging Middleware ───────────────────────────────────────────────────────
 
-/** Log every incoming request. */
-export function requestLogger(req: Request, _res: Response, next: NextFunction): void {
+/** Log every incoming request and inject a correlation ID. */
+export function requestLogger(req: Request, res: Response, next: NextFunction): void {
+    const correlationId = randomUUID();
+    res.locals.correlationId = correlationId;
     const method = req.method;
     const path = req.path;
-    console.log(`[API] ${method} ${path}`);
-    void logThought(`[API] ${method} ${path}`);
+    console.log(`[API] [${correlationId}] ${method} ${path}`);
+    void logThought(`[API] [${correlationId}] ${method} ${path}`);
     next();
 }

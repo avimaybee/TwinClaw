@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { createSession, getSessionMessages, saveMessage } from '../services/db.js';
 import { ModelRouter } from '../services/model-router.js';
-import { indexConversationTurn, retrieveMemoryContext } from '../services/semantic-memory.js';
+import {
+  indexConversationTurn,
+  retrieveEvidenceAwareMemoryContext,
+} from '../services/semantic-memory.js';
 import { OrchestrationService } from '../services/orchestration-service.js';
 import type { GatewayHandler, InboundMessage } from '../types/messaging.js';
 import type {
@@ -15,6 +18,14 @@ import type { Message, Tool } from './types.js';
 import { SkillRegistry } from '../services/skill-registry.js';
 import type { Skill } from '../skills/types.js';
 import { PolicyEngine } from '../services/policy-engine.js';
+import { logThought } from '../utils/logger.js';
+import { ContextLifecycleOrchestrator } from '../services/context-lifecycle.js';
+import type {
+  ContextBudgetConfig,
+  ContextHistoryPlan,
+  ContextSectionResult,
+  RuntimeContextPlan,
+} from '../types/context-budget.js';
 
 const DEFAULT_MAX_TOOL_ROUNDS = 6;
 const DEFAULT_DELEGATION_MIN_SCORE = 2;
@@ -74,6 +85,7 @@ export interface GatewayOptions {
   policyEngine?: PolicyEngine;
   enableDelegation?: boolean;
   delegationMinScore?: number;
+  contextBudgetConfig?: Partial<ContextBudgetConfig>;
 }
 
 export class Gateway implements GatewayHandler {
@@ -86,6 +98,8 @@ export class Gateway implements GatewayHandler {
   readonly #maxToolRounds: number;
   readonly #enableDelegation: boolean;
   readonly #delegationMinScore: number;
+  readonly #contextLifecycle: ContextLifecycleOrchestrator;
+  readonly #degradationCounts: Map<string, number> = new Map();
 
   constructor(registry: SkillRegistry, options: GatewayOptions = {}) {
     this.#router = options.router ?? new ModelRouter();
@@ -102,6 +116,7 @@ export class Gateway implements GatewayHandler {
       1,
       Number(options.delegationMinScore ?? DEFAULT_DELEGATION_MIN_SCORE),
     );
+    this.#contextLifecycle = new ContextLifecycleOrchestrator(options.contextBudgetConfig);
 
     this.refreshTools();
   }
@@ -111,6 +126,34 @@ export class Gateway implements GatewayHandler {
     const skills = this.#registry.list();
     this.#tools = skills.map(skillToTool);
     this.#laneExecutor.syncFromRegistry(this.#registry);
+  }
+
+  getContextDegradationSnapshot(limit = 8): {
+    degradedSessions: number;
+    maxConsecutiveDegradation: number;
+    sessions: Array<{ sessionId: string; consecutiveDegradation: number }>;
+  } {
+    const ranked = [...this.#degradationCounts.entries()]
+      .filter(([, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1]);
+    const sessions = ranked.slice(0, Math.max(1, limit)).map(([sessionId, consecutiveDegradation]) => ({
+      sessionId,
+      consecutiveDegradation,
+    }));
+
+    return {
+      degradedSessions: ranked.length,
+      maxConsecutiveDegradation: ranked[0]?.[1] ?? 0,
+      sessions,
+    };
+  }
+
+  resetContextDegradation(sessionId?: string): void {
+    if (sessionId) {
+      this.#degradationCounts.delete(sessionId);
+      return;
+    }
+    this.#degradationCounts.clear();
   }
 
   async processMessage(message: InboundMessage): Promise<string> {
@@ -132,21 +175,40 @@ export class Gateway implements GatewayHandler {
     createSession(sessionId);
     const historyRows = getSessionMessages(sessionId) as PersistedMessageRow[];
     const conversationHistory = toConversationHistory(historyRows);
+    const historyPlan = this.#contextLifecycle.planHistoryWindow(conversationHistory);
     await this.#persistTurn(sessionId, 'user', normalizedText);
 
-    const memoryContext = await retrieveMemoryContext(sessionId, normalizedText);
+    const memoryRetrieval = await retrieveEvidenceAwareMemoryContext(
+      sessionId,
+      normalizedText,
+      historyPlan.memoryTopK,
+    );
+    const memoryContext = memoryRetrieval.context;
     const delegationContext = await this.#runDelegationIfNeeded(
       sessionId,
       normalizedText,
-      conversationHistory,
+      historyPlan.hotHistory,
       memoryContext,
     );
-    const runtimeContext = [memoryContext, delegationContext].filter(Boolean).join('\n\n');
-    const systemPrompt = await assembleContext(runtimeContext);
+    const runtimePlan = this.#contextLifecycle.planRuntimeContext({
+      memoryContext,
+      delegationContext,
+      warmSummary: historyPlan.warmSummary,
+      archivedSummary: historyPlan.archivedSummary,
+    });
+    const systemPrompt = await assembleContext(runtimePlan.runtimeContext);
+    const compactSystemPrompt = this.#contextLifecycle.compactSystemPrompt(systemPrompt);
+    this.#recordContextBudgetDiagnostics(
+      sessionId,
+      historyPlan,
+      runtimePlan,
+      compactSystemPrompt,
+      memoryRetrieval.diagnostics,
+    );
 
     const messages: Message[] = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory,
+      { role: 'system', content: compactSystemPrompt.content },
+      ...historyPlan.hotHistory,
       { role: 'user', content: normalizedText },
     ];
 
@@ -161,6 +223,7 @@ export class Gateway implements GatewayHandler {
       const assistantMessage = (await this.#router.createChatCompletion(
         messages,
         this.#tools,
+        { sessionId },
       )) as Message;
 
       const assistantContent = assistantMessage.content ?? '';
@@ -180,7 +243,7 @@ export class Gateway implements GatewayHandler {
         return assistantContent || 'Done.';
       }
 
-      const toolResults = await this.#laneExecutor.executeToolCalls(assistantMessage, sessionId);
+      const toolResults = await this.#laneExecutor.executeToolCalls(assistantMessage, sessionId, this.#policyEngine);
       for (const toolMessage of toolResults) {
         messages.push(toolMessage);
         await this.#persistTurn(sessionId, 'tool', toolMessage.content ?? '');
@@ -199,6 +262,48 @@ export class Gateway implements GatewayHandler {
     if (role !== 'tool') {
       await indexConversationTurn(sessionId, role, content);
     }
+  }
+
+  #recordContextBudgetDiagnostics(
+    sessionId: string,
+    historyPlan: ContextHistoryPlan,
+    runtimePlan: RuntimeContextPlan,
+    systemPromptSection: ContextSectionResult,
+    retrievalDiagnostics: string[],
+  ): void {
+    const degraded =
+      historyPlan.stats.wasCompacted ||
+      runtimePlan.stats.wasCompacted ||
+      systemPromptSection.wasCompacted ||
+      systemPromptSection.wasOmitted;
+
+    const previousCount = this.#degradationCounts.get(sessionId) ?? 0;
+    const nextCount = degraded ? previousCount + 1 : 0;
+    this.#degradationCounts.set(sessionId, nextCount);
+
+    const diagnostics = [
+      ...retrievalDiagnostics,
+      ...historyPlan.diagnostics,
+      ...runtimePlan.diagnostics,
+      systemPromptSection.note ?? '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    const alertMessage =
+      degraded && nextCount >= 3
+        ? ` ALERT: sustained context degradation detected for ${nextCount} consecutive turn(s).`
+        : '';
+
+    const report =
+      `[ContextBudget] session=${sessionId} ` +
+      `history hot/warm/archived=${historyPlan.stats.hotMessages}/${historyPlan.stats.warmMessages}/${historyPlan.stats.archivedMessages} ` +
+      `memoryTopK=${historyPlan.memoryTopK} ` +
+      `runtimeTokens(memory/delegation/warm/archive)=${runtimePlan.stats.memoryTokens}/${runtimePlan.stats.delegationTokens}/${runtimePlan.stats.warmTokens}/${runtimePlan.stats.archivedTokens} ` +
+      `systemTokens=${systemPromptSection.usedTokens}/${this.#contextLifecycle.config.systemBudgetTokens}. ` +
+      `${diagnostics}${alertMessage}`;
+
+    void logThought(report.trim());
   }
 
   async #runDelegationIfNeeded(
@@ -381,7 +486,7 @@ export class Gateway implements GatewayHandler {
     const response = (await this.#router.createChatCompletion([
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ])) as Message;
+    ], undefined, { sessionId: request.sessionId })) as Message;
 
     if (signal.aborted) {
       throw new Error(`Delegated job '${job.id}' was cancelled during execution.`);

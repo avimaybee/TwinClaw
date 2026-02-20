@@ -3,6 +3,11 @@ import path from 'node:path';
 import { McpClientAdapter } from './mcp-client-adapter.js';
 import type { SkillRegistry } from './skill-registry.js';
 import type { McpConfig, McpServerConfig, McpServerSnapshot } from '../types/mcp.js';
+import { SkillPackageManager } from './skill-package-manager.js';
+import type {
+    SkillPackageDiagnostics,
+    SkillPackageMutationResult,
+} from '../types/skill-packages.js';
 import { logThought } from '../utils/logger.js';
 
 const DEFAULT_CONFIG_PATH = path.resolve('mcp-servers.json');
@@ -27,43 +32,32 @@ const DEFAULT_CONFIG_PATH = path.resolve('mcp-servers.json');
 export class McpServerManager {
     readonly #registry: SkillRegistry;
     readonly #adapters: Map<string, McpClientAdapter> = new Map();
+    readonly #packageManager: SkillPackageManager;
     #configPath: string;
 
-    constructor(registry: SkillRegistry, configPath?: string) {
+    constructor(
+        registry: SkillRegistry,
+        configPath?: string,
+        packageManager?: SkillPackageManager,
+    ) {
         this.#registry = registry;
         this.#configPath = configPath ?? DEFAULT_CONFIG_PATH;
+        this.#packageManager = packageManager ?? new SkillPackageManager();
     }
 
     /** Load MCP server configuration from the config file. */
     async loadConfig(): Promise<McpServerConfig[]> {
+        const enabledServers: McpServerConfig[] = [];
+
         try {
             const raw = await readFile(this.#configPath, 'utf8');
             const config: McpConfig = JSON.parse(raw);
 
             if (!Array.isArray(config.servers)) {
                 console.warn('[McpServerManager] Config file has no servers array.');
-                return [];
+            } else {
+                enabledServers.push(...config.servers.filter((s) => s.enabled !== false));
             }
-
-            const enabledServers = config.servers.filter((s) => s.enabled !== false);
-
-            for (const serverConfig of enabledServers) {
-                if (this.#adapters.has(serverConfig.id)) {
-                    console.warn(
-                        `[McpServerManager] Duplicate server ID '${serverConfig.id}' — skipping.`,
-                    );
-                    continue;
-                }
-
-                const adapter = new McpClientAdapter(serverConfig, this.#registry);
-                this.#adapters.set(serverConfig.id, adapter);
-            }
-
-            await logThought(
-                `[McpServerManager] Loaded ${enabledServers.length} server(s) from config.`,
-            );
-
-            return enabledServers;
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
 
@@ -71,13 +65,70 @@ export class McpServerManager {
                 console.warn(
                     `[McpServerManager] Config file not found at ${this.#configPath}. No MCP servers will be loaded.`,
                 );
-                return [];
+            } else {
+                console.error('[McpServerManager] Failed to load config:', message);
+                await logThought(`[McpServerManager] Config load failed: ${message}`);
+            }
+        }
+
+        const packagePlan = await this.#packageManager.getActivationPlan();
+        for (const packagedServer of packagePlan.servers) {
+            const duplicate = enabledServers.some((server) => server.id === packagedServer.id);
+            if (duplicate) {
+                console.warn(
+                    `[McpServerManager] Packaged server '${packagedServer.id}' conflicts with static config and was skipped.`,
+                );
+                continue;
+            }
+            enabledServers.push(packagedServer);
+        }
+
+        for (const serverConfig of enabledServers) {
+            if (this.#adapters.has(serverConfig.id)) {
+                console.warn(
+                    `[McpServerManager] Duplicate server ID '${serverConfig.id}' — skipping.`,
+                );
+                continue;
             }
 
-            console.error('[McpServerManager] Failed to load config:', message);
-            await logThought(`[McpServerManager] Config load failed: ${message}`);
-            return [];
+            const adapter = new McpClientAdapter(serverConfig, this.#registry);
+            this.#adapters.set(serverConfig.id, adapter);
         }
+
+        if (packagePlan.diagnostics.violations.length > 0) {
+            const summary = packagePlan.diagnostics.violations
+                .map((violation) => `${violation.packageName}@${violation.version}:${violation.code}`)
+                .join(', ');
+            console.warn(`[McpServerManager] Skill package activation blocked: ${summary}`);
+        }
+
+        await logThought(
+            `[McpServerManager] Loaded ${enabledServers.length} server(s) from config/package lock.`,
+        );
+
+        return enabledServers;
+    }
+
+    async getSkillPackageDiagnostics(): Promise<SkillPackageDiagnostics> {
+        return this.#packageManager.getDiagnostics();
+    }
+
+    async installSkillPackage(
+        packageName: string,
+        versionRange?: string,
+    ): Promise<SkillPackageMutationResult> {
+        return this.#packageManager.installPackage(packageName, versionRange);
+    }
+
+    async upgradeSkillPackage(
+        packageName: string,
+        versionRange?: string,
+    ): Promise<SkillPackageMutationResult> {
+        return this.#packageManager.upgradePackage(packageName, versionRange);
+    }
+
+    async uninstallSkillPackage(packageName: string): Promise<SkillPackageMutationResult> {
+        return this.#packageManager.uninstallPackage(packageName);
     }
 
     /** Connect all configured servers that have autoConnect enabled. */

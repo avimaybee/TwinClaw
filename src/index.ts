@@ -1,5 +1,10 @@
-import { config } from 'dotenv-vault';
-config();
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+try {
+    require('dotenv-vault/config');
+} catch (err) {
+    // dotenv-vault is optional for development
+}
 import { runOnboarding, startBasicREPL } from './core/onboarding.js';
 import { Gateway } from './core/gateway.js';
 import { HeartbeatService } from './core/heartbeat.js';
@@ -13,8 +18,37 @@ import { McpServerManager } from './services/mcp-server-manager.js';
 import { createBuiltinSkills } from './skills/builtin.js';
 import { SttService } from './services/stt-service.js';
 import { TtsService } from './services/tts-service.js';
+import { QueueService } from './services/queue-service.js';
+import { ModelRouter } from './services/model-router.js';
+import { IncidentManager } from './services/incident-manager.js';
+import { RuntimeBudgetGovernor } from './services/runtime-budget-governor.js';
+import { LocalStateBackupService } from './services/local-state-backup.js';
 import { logThought } from './utils/logger.js';
+import { PolicyEngine } from './services/policy-engine.js';
+import { savePolicyAuditLog } from './services/db.js';
+import { getSecretVaultService } from './services/secret-vault.js';
+import { handleSecretVaultCli } from './core/secret-vault-cli.js';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+
+const secretVault = getSecretVaultService();
+
+if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
+    process.exit(process.exitCode ?? 0);
+}
+
+try {
+    const preflight = secretVault.assertStartupPreflight(['API_SECRET']);
+    if (preflight.warnings.length > 0) {
+        const warningSummary = preflight.warnings.join(' | ');
+        console.warn(`[TwinClaw] Secret preflight warnings: ${warningSummary}`);
+        void logThought(`[SecretVault] ${warningSummary}`);
+    }
+} catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[TwinClaw] Startup blocked by secret preflight: ${message}`);
+    process.exit(1);
+}
 
 console.log("TwinClaw Gateway Initialized.");
 
@@ -75,20 +109,32 @@ void (async () => {
 
 // ── Gateway & Interface Dispatcher ────────────────────────────────────────────
 
-const gateway = new Gateway(skillRegistry);
-const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+const policyEngine = new PolicyEngine();
+policyEngine.onDecision = (sessionId, decision) => {
+    savePolicyAuditLog(
+        randomUUID(),
+        sessionId,
+        decision.skillName,
+        decision.action,
+        decision.reason,
+        decision.profileId
+    );
+};
+
+const runtimeBudgetGovernor = new RuntimeBudgetGovernor();
+const modelRouter = new ModelRouter({ budgetGovernor: runtimeBudgetGovernor });
+const gateway = new Gateway(skillRegistry, { policyEngine, router: modelRouter });
+const telegramBotToken = secretVault.readSecret('TELEGRAM_BOT_TOKEN');
 const telegramUserId = process.env.TELEGRAM_USER_ID;
-const whatsappPhoneNumber = process.env.WHATSAPP_PHONE_NUMBER;
-const groqApiKey = process.env.GROQ_API_KEY;
-const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
+const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? process.env.WHATSAPP_PHONE_NUMBER;
+const groqApiKey = secretVault.readSecret('GROQ_API_KEY');
 
 let dispatcher: Dispatcher | null = null;
 
 if (
     (telegramBotToken && telegramUserId) || whatsappPhoneNumber
 ) {
-    if (groqApiKey && elevenLabsApiKey && elevenLabsVoiceId) {
+    if (groqApiKey) {
         let telegramHandler: TelegramHandler | undefined;
         let whatsappHandler: WhatsAppHandler | undefined;
 
@@ -106,17 +152,53 @@ if (
         }
 
         const sttService = new SttService(groqApiKey);
-        const ttsService = new TtsService(elevenLabsApiKey, elevenLabsVoiceId);
-        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway);
-        void logThought('[TwinClaw] Messaging dispatcher initialized.');
+        const ttsService = new TtsService(groqApiKey);
+
+        // Initialize persistent delivery queue
+        const queueService = new QueueService(
+            async (platform, chatId, text) => {
+                switch (platform) {
+                    case 'telegram':
+                        if (!telegramHandler) throw new Error('Telegram handler not configured');
+                        await telegramHandler.sendText(Number(chatId), text);
+                        break;
+                    case 'whatsapp':
+                        if (!whatsappHandler) throw new Error('WhatsApp handler not configured');
+                        await whatsappHandler.sendText(String(chatId), text);
+                        break;
+                    default:
+                        throw new Error(`Unsupported platform in queue: ${platform}`);
+                }
+            },
+            heartbeat.scheduler
+        );
+        queueService.start();
+
+        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway, queueService);
+        void logThought('[TwinClaw] Messaging dispatcher and persistent queue initialized.');
     } else {
-        console.warn('[TwinClaw] Dispatcher requires GROQ_API_KEY, ELEVENLABS_API_KEY, and ELEVENLABS_VOICE_ID.');
+        console.warn('[TwinClaw] Dispatcher requires GROQ_API_KEY.');
     }
 } else {
     console.log(
         '[TwinClaw] Messaging dispatcher not initialized (missing Telegram AND WhatsApp configs).',
     );
 }
+
+const incidentManager = new IncidentManager({
+    gateway,
+    router: modelRouter,
+    queue: dispatcher?.queue,
+    scheduler: heartbeat.scheduler,
+});
+incidentManager.start();
+const localStateBackup = new LocalStateBackupService({
+    scheduler: heartbeat.scheduler,
+});
+localStateBackup.start();
+void logThought('[TwinClaw] Incident self-healing manager initialized.');
+void logThought('[TwinClaw] Local-state backup automation initialized.');
+void logThought('[TwinClaw] Runtime budget governor initialized.');
 
 // ── Proactive Notifier ─────────────────────────────────────────────────────
 
@@ -171,13 +253,22 @@ startApiServer({
     mcpManager,
     gateway,
     dispatcher: dispatcher ?? undefined,
+    incidentManager,
+    budgetGovernor: runtimeBudgetGovernor,
+    localStateBackup,
+    modelRouter,
 });
 
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 
 process.on('SIGINT', () => {
     heartbeat.stop();
-    dispatcher?.shutdown();
+    incidentManager.stop();
+    localStateBackup.stop();
+    if (dispatcher) {
+        dispatcher.queue.stop();
+        dispatcher.shutdown();
+    }
     void fileWatcher.stopAll();
     void mcpManager.disconnectAll();
     void logThought('TwinClaw process received SIGINT; services stopped.');
@@ -186,7 +277,12 @@ process.on('SIGINT', () => {
 
 process.on('SIGTERM', () => {
     heartbeat.stop();
-    dispatcher?.shutdown();
+    incidentManager.stop();
+    localStateBackup.stop();
+    if (dispatcher) {
+        dispatcher.queue.stop();
+        dispatcher.shutdown();
+    }
     void fileWatcher.stopAll();
     void mcpManager.disconnectAll();
     void logThought('TwinClaw process received SIGTERM; services stopped.');

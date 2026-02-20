@@ -1,14 +1,18 @@
 import { Tool, ToolCall, Message } from './types.js';
-import { logToolCall } from '../utils/logger.js';
+import { logToolCall, scrubSensitiveText } from '../utils/logger.js';
 import type { SkillRegistry } from '../services/skill-registry.js';
 import type { Skill } from '../skills/types.js';
+import type { PolicyEngine } from '../services/policy-engine.js';
 
 /** Convert a Skill (from the registry) into the internal Tool format used by LaneExecutor. */
-function skillToTool(skill: Skill): Tool {
+function skillToTool(skill: Skill): ToolWithMetadata {
     return {
         name: skill.name,
         description: skill.description,
         parameters: skill.parameters ?? {},
+        mcpScope: skill.mcpScope,
+        serverId: skill.serverId,
+        adapter: skill.adapter,
         execute: async (args: Record<string, unknown>) => {
             const result = await skill.execute(args);
             return result.output;
@@ -16,8 +20,14 @@ function skillToTool(skill: Skill): Tool {
     };
 }
 
+export interface ToolWithMetadata extends Tool {
+    mcpScope?: string;
+    serverId?: string;
+    adapter?: any; // McpClientAdapter but avoiding circular dep
+}
+
 export class LaneExecutor {
-    private tools: Map<string, Tool> = new Map();
+    private tools: Map<string, ToolWithMetadata> = new Map();
 
     constructor(tools: Tool[] = []) {
         for (const tool of tools) {
@@ -44,12 +54,12 @@ export class LaneExecutor {
         try {
             return JSON.parse(args);
         } catch {
-            console.warn(`[LaneExecutor] Failed to parse arguments: ${args}`);
+            console.warn(`[LaneExecutor] Failed to parse arguments: ${scrubSensitiveText(args)}`);
             return {};
         }
     }
 
-    public async executeToolCalls(message: Message): Promise<Message[]> {
+    public async executeToolCalls(message: Message, sessionId: string, policyEngine?: PolicyEngine): Promise<Message[]> {
         if (!message.tool_calls || message.tool_calls.length === 0) {
             return [];
         }
@@ -69,15 +79,58 @@ export class LaneExecutor {
                 content = `Error: Tool '${toolName}' is not registered or unavailable.`;
                 await logToolCall(toolName, args, content);
             } else {
-                try {
-                    console.log(`[LaneExecutor] Executing ${toolName} with args:`, args);
-                    const result = await tool.execute(args);
-                    content = typeof result === 'string' ? result : JSON.stringify(result);
+                let allowed = true;
+                let decision = policyEngine ? policyEngine.evaluate(sessionId, toolName) : null;
+
+                // 1. MCP Scope Enforcement (Applies before or alongside PolicyEngine)
+                if (tool.serverId && tool.mcpScope) {
+                    if (tool.mcpScope === 'unclassified') {
+                        content = `Access Denied: MCP tool '${toolName}' is unclassified (secure default). Capability Profile: ${tool.mcpScope}`;
+                        allowed = false;
+                        tool.adapter?.auditScopeBlock(sessionId, toolName, tool.mcpScope, 'Secure default for unclassified tools');
+                    } else if (tool.mcpScope === 'high-risk') {
+                        // High-risk blocked-by-default: Needs explicit policy allow, not a fallback
+                        const isFallback = decision ? decision.reason.includes('Fell back to') : true;
+                        if (isFallback) {
+                            content = `Access Denied: MCP tool '${toolName}' is 'high-risk' and blocked by default. Requires explicit allow rule. Capability Profile: ${tool.mcpScope}`;
+                            allowed = false;
+                            tool.adapter?.auditScopeBlock(sessionId, toolName, tool.mcpScope, 'High-risk tools require explicit allow rule');
+                        }
+                    }
+
+                    if (allowed) {
+                        tool.adapter?.auditScopeAllow(sessionId, toolName, tool.mcpScope);
+                    }
+                }
+
+                // 2. Policy Governance Baseline
+                if (allowed && decision && decision.action === 'deny') {
+                    content = `Access Denied: Tool '${toolName}' is blocked by policy. Reason: ${decision.reason}`;
+                    allowed = false;
+                }
+
+                if (!allowed) {
+                    console.warn(`[LaneExecutor] Blocked tool ${toolName}: ${content}`);
                     await logToolCall(toolName, args, content);
-                } catch (error: any) {
-                    console.error(`[LaneExecutor] Tool ${toolName} failed:`, error);
-                    content = `Error executing tool: ${error.message}`;
-                    await logToolCall(toolName, args, content);
+                }
+
+                if (allowed) {
+                    try {
+                        console.log(
+                            `[LaneExecutor] Executing ${toolName} with args: ${scrubSensitiveText(
+                                JSON.stringify(args),
+                            )}`,
+                        );
+                        const result = await tool.execute(args);
+                        content = typeof result === 'string' ? result : JSON.stringify(result);
+                        await logToolCall(toolName, args, content);
+                    } catch (error: any) {
+                        const rawMessage = error instanceof Error ? error.message : String(error);
+                        const sanitizedMessage = scrubSensitiveText(rawMessage);
+                        console.error(`[LaneExecutor] Tool ${toolName} failed: ${sanitizedMessage}`);
+                        content = `Error executing tool: ${sanitizedMessage}`;
+                        await logToolCall(toolName, args, content);
+                    }
                 }
             }
 

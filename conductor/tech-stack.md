@@ -7,9 +7,9 @@
 - **Local Workspace:** AntiGravity Workspace for multi-agent workflow orchestration.
 
 ## AI & Model Layer
-- **LLM Routing:** OpenRouter (Primary: Claude, GPT-4, Grok) with automated failover and rate-limit handling.
+- **LLM Routing:** OpenRouter with automated failover and rate-limit handling.
 - **Model Orchestration:** LiteLLM Proxy / OpenClaw Core for standardized tool calling and provider abstraction.
-- **Voice & Audio:** ElevenLabs (TTS) and Groq/Whisper (STT) for agentic voice interactions.
+- **Voice & Audio:** Groq Audio Speech (TTS, Orpheus) and Groq/Whisper (STT) for agentic voice interactions.
 - **Intelligence Protocol:** Model Context Protocol (MCP) via `@modelcontextprotocol/sdk` for standardized skill integration across 12+ external servers.
 
 ## Memory & Data Substrate

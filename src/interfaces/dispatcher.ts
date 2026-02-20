@@ -4,9 +4,8 @@ import type { TelegramHandler } from './telegram_handler.js';
 import type { WhatsAppHandler } from './whatsapp_handler.js';
 import type { SttService } from '../services/stt-service.js';
 import type { TtsService } from '../services/tts-service.js';
-import { DeliveryTracker } from '../services/delivery-tracker.js';
-import { withRetry } from '../utils/retry.js';
 import { logThought } from '../utils/logger.js';
+import type { QueueService } from '../services/queue-service.js';
 
 /**
  * Unified Interface Dispatcher
@@ -28,7 +27,7 @@ export class Dispatcher {
   readonly #stt: SttService;
   readonly #tts: TtsService;
   readonly #gateway: GatewayHandler;
-  readonly #tracker: DeliveryTracker;
+  readonly #queue: QueueService;
 
   constructor(
     telegram: TelegramHandler | undefined,
@@ -36,22 +35,23 @@ export class Dispatcher {
     stt: SttService,
     tts: TtsService,
     gateway: GatewayHandler,
+    queue: QueueService,
   ) {
     this.#telegram = telegram;
     this.#whatsapp = whatsapp;
     this.#stt = stt;
     this.#tts = tts;
     this.#gateway = gateway;
-    this.#tracker = new DeliveryTracker();
+    this.#queue = queue;
 
     // Wire inbound message callbacks.
     if (this.#telegram) this.#telegram.onMessage = (msg) => this.#handle(msg);
     if (this.#whatsapp) this.#whatsapp.onMessage = (msg) => this.#handle(msg);
   }
 
-  /** Expose the delivery tracker for reliability telemetry. */
-  get deliveryTracker(): DeliveryTracker {
-    return this.#tracker;
+  /** Expose the queue service for reliability and dead-letter controls. */
+  get queue(): QueueService {
+    return this.#queue;
   }
 
   // ── Core Dispatch Loop ────────────────────────────────────────────────────────
@@ -95,84 +95,18 @@ export class Dispatcher {
 
   /**
    * Route the gateway's response back to the originating platform
-   * with retry/backoff and delivery tracking.
+   * via the persistent delivery queue.
    */
   async #dispatch(origin: InboundMessage, responseText: string): Promise<void> {
-    const recordId = this.#tracker.createRecord(origin.platform, origin.chatId);
-
-    const result = await withRetry(
-      async () => {
-        this.#tracker.recordAttemptStart(recordId);
-
-        switch (origin.platform) {
-          case 'telegram':
-            await this.#telegram?.sendText(origin.chatId, responseText);
-            break;
-          case 'whatsapp':
-            await this.#whatsapp?.sendText(String(origin.chatId), responseText);
-            break;
-          default:
-            throw new Error(`No adapter registered for platform: ${origin.platform}`);
-        }
-      },
-      {
-        maxAttempts: 3,
-        baseDelayMs: 1000,
-        backoffFactor: 2,
-        label: `${origin.platform}:sendText`,
-      },
-    );
-
-    if (result.ok) {
-      this.#tracker.recordSuccess(recordId);
-    } else {
-      this.#tracker.recordFailure(recordId, result.error ?? 'unknown');
-      this.#tracker.markFailed(recordId);
-      console.error(
-        `[Dispatcher] Failed to deliver to ${origin.platform}:${origin.chatId} after ${result.attempts} attempt(s): ${result.error}`,
-      );
-    }
+    this.#queue.enqueue(origin.platform, origin.chatId, responseText);
   }
 
   /**
    * Send a proactive (agent-initiated) message to a specific platform target
-   * with retry/backoff and delivery tracking.
+   * via the persistent delivery queue.
    */
   async sendProactive(platform: string, chatId: string | number, text: string): Promise<void> {
-    const recordId = this.#tracker.createRecord(platform, chatId);
-
-    const result = await withRetry(
-      async () => {
-        this.#tracker.recordAttemptStart(recordId);
-
-        switch (platform) {
-          case 'telegram':
-            await this.#telegram?.sendText(chatId, text);
-            break;
-          case 'whatsapp':
-            await this.#whatsapp?.sendText(String(chatId), text);
-            break;
-          default:
-            throw new Error(`No adapter registered for proactive platform: ${platform}`);
-        }
-      },
-      {
-        maxAttempts: 3,
-        baseDelayMs: 1000,
-        backoffFactor: 2,
-        label: `${platform}:proactive`,
-      },
-    );
-
-    if (result.ok) {
-      this.#tracker.recordSuccess(recordId);
-    } else {
-      this.#tracker.recordFailure(recordId, result.error ?? 'unknown');
-      this.#tracker.markFailed(recordId);
-      console.error(
-        `[Dispatcher] Proactive send failed to ${platform}:${chatId} after ${result.attempts} attempt(s): ${result.error}`,
-      );
-    }
+    this.#queue.enqueue(platform, chatId, text);
   }
 
   /** Tear down all active interface adapters cleanly. */

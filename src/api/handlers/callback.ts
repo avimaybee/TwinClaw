@@ -3,6 +3,7 @@ import type { WebhookCallbackPayload, WebhookCallbackData } from '../../types/ap
 import type { Gateway } from '../../core/gateway.js';
 import { sendOk, sendError } from '../shared.js';
 import { logThought } from '../../utils/logger.js';
+import { recordCallbackReceipt, getCallbackReceipt, getDelivery, updateDeliveryState } from '../../services/db.js';
 
 export interface CallbackDeps {
     gateway: Gateway;
@@ -40,6 +41,24 @@ export function handleWebhookCallback(deps: CallbackDeps) {
             return;
         }
 
+        // ── Idempotency Check ───────────────────────────────────────────────────
+        const idempotencyKey = `${body.taskId}:${body.eventType}:${body.status}`;
+        const existingReceipt = getCallbackReceipt(idempotencyKey);
+
+        if (existingReceipt) {
+            await logThought(
+                `[API] Webhook rejected — duplicate payload detected for key: ${idempotencyKey}`,
+            );
+            const data: WebhookCallbackData = {
+                accepted: true,
+                eventType: body.eventType,
+                taskId: body.taskId,
+                outcome: 'duplicate',
+            };
+            sendOk(res, data, 200);
+            return;
+        }
+
         await logThought(
             `[API] Webhook received — event: ${body.eventType}, task: ${body.taskId}, status: ${body.status}`,
         );
@@ -52,19 +71,31 @@ export function handleWebhookCallback(deps: CallbackDeps) {
                 (body.result ? `\nResult: ${JSON.stringify(body.result)}` : '') +
                 (body.error ? `\nError: ${body.error}` : '');
 
+            // ── Reconciliation ───────────────────────────────────────────────────
+            const delivery = getDelivery(body.taskId);
+            if (delivery) {
+                const newState = body.status === 'completed' ? 'sent' : body.status === 'failed' ? 'failed' : delivery.state;
+                updateDeliveryState(body.taskId, newState, newState === 'sent' ? new Date().toISOString() : null);
+                await logThought(`[API] Webhook reconciled delivery queue item: ${body.taskId} -> ${newState}`);
+            }
+
             // Fire-and-forget: process the webhook payload as a conversation turn
             void deps.gateway.processText(sessionId, summaryText);
+
+            recordCallbackReceipt(idempotencyKey, 202, 'accepted');
 
             const data: WebhookCallbackData = {
                 accepted: true,
                 eventType: body.eventType,
                 taskId: body.taskId,
+                outcome: 'accepted',
             };
 
             sendOk(res, data, 202);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             await logThought(`[API] Webhook processing error: ${message}`);
+            recordCallbackReceipt(idempotencyKey, 500, 'rejected');
             sendError(res, `Webhook processing error: ${message}`, 500);
         }
     };

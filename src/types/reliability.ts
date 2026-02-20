@@ -1,5 +1,5 @@
-/** Delivery lifecycle states for outbound messages. */
-export type DeliveryState = 'pending' | 'sending' | 'retrying' | 'sent' | 'failed';
+/** Delivery lifecycle states for outbound messages in the persistent queue. */
+export type DeliveryState = 'queued' | 'dispatching' | 'sent' | 'failed' | 'dead_letter';
 
 /** A single tracked outbound delivery attempt. */
 export interface DeliveryAttempt {
@@ -15,9 +15,11 @@ export interface DeliveryRecord {
     id: string;
     platform: string;
     chatId: string | number;
+    textPayload: string;
     state: DeliveryState;
     attempts: DeliveryAttempt[];
     createdAt: string;
+    nextAttemptAt?: string;
     resolvedAt?: string;
 }
 

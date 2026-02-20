@@ -1,0 +1,8 @@
+{
+  "track_id": "install_bootstrap_fastpath_20260220",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-20T17:17:40Z",
+  "updated_at": "2026-02-20T17:17:40Z",
+  "description": "Harden first-run installation and bootstrap paths to reach working MVP state quickly and repeatably."
+}

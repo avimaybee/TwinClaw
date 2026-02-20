@@ -29,7 +29,8 @@ export class DeliveryTracker {
             id,
             platform,
             chatId,
-            state: 'pending',
+            textPayload: '', // Added missing property
+            state: 'queued',
             attempts: [],
             createdAt: new Date().toISOString(),
         };
@@ -55,7 +56,7 @@ export class DeliveryTracker {
         };
 
         record.attempts.push(attempt);
-        record.state = record.attempts.length === 1 ? 'sending' : 'retrying';
+        record.state = 'dispatching';
     }
 
     /** Mark the latest attempt as successful. */
