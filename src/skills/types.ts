@@ -1,4 +1,4 @@
-import type { JsonSchema, McpCapabilityScope } from '../types/mcp.js';
+import type { JsonSchema, McpCapabilityScope, McpScopeAuditAdapter } from '../types/mcp.js';
 
 export interface SkillExecutionResult {
   ok: boolean;
@@ -18,7 +18,7 @@ export interface Skill {
   /** If source is 'mcp', which server ID provides this tool. */
   serverId?: string;
   /** If source is 'mcp', the adapter instance for auditing/health. */
-  adapter?: any;
+  adapter?: McpScopeAuditAdapter;
   /** If source is 'mcp', what capability scope this tool has. */
   mcpScope?: McpCapabilityScope;
   execute(input: Record<string, unknown>): Promise<SkillExecutionResult>;

@@ -208,7 +208,8 @@ export class PersonaStateService {
   #validateUpdateInput(input: PersonaStateUpdateInput): PersonaStateValidatedUpdateInput {
     const hints: string[] = [];
 
-    if (typeof input.expectedRevision !== 'string' || input.expectedRevision.trim().length === 0) {
+    const isValidRevision = typeof input.expectedRevision === 'string' && input.expectedRevision.trim().length > 0;
+    if (!isValidRevision) {
       hints.push("'expectedRevision' must be a non-empty string.");
     }
 
@@ -220,6 +221,7 @@ export class PersonaStateService {
       throw new PersonaValidationError(hints);
     }
 
+    // isValidRevision is true here (would have thrown otherwise)
     return {
       expectedRevision: input.expectedRevision as string,
       soul,

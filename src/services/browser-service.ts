@@ -268,7 +268,7 @@ export class BrowserService {
             break;
           }
 
-          const siblings = Array.from(parent.children).filter((child) => child.tagName === current!.tagName);
+          const siblings = Array.from<Element>(parent.children).filter((child) => child.tagName === current!.tagName);
           const index = Math.max(1, siblings.indexOf(current) + 1);
           segments.unshift(`${tag}:nth-of-type(${index})`);
           current = parent;
