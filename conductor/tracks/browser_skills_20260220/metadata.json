@@ -1,0 +1,8 @@
+{
+  "track_id": "browser_skills_20260220",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-20T14:31:00Z",
+  "updated_at": "2026-02-20T14:31:00Z",
+  "description": "Integrate Playwright for browser automation, create the initial "LEGO-block" system skills (shell execution), and implement the daily transcript logging."
+}

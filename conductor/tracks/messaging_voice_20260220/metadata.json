@@ -1,0 +1,8 @@
+{
+  "track_id": "messaging_voice_20260220",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-20T14:27:00Z",
+  "updated_at": "2026-02-20T14:27:00Z",
+  "description": "Implement the Telegram Bot integration, security whitelisting, and the Whisper/ElevenLabs audio processing pipeline."
+}
