@@ -10,6 +10,7 @@ import {
     getDeliveryStateCounts,
     getDeadLetters,
     getDeliveryMetrics,
+    type DeliveryQueueRow,
 } from './db.js';
 import type { JobScheduler } from './job-scheduler.js';
 
@@ -24,6 +25,17 @@ export interface QueueServiceOptions {
 
 export type DispatchAdapter = (platform: string, chatId: string, textPayload: string) => Promise<void>;
 export type QueueProcessingMode = 'normal' | 'throttled' | 'drain';
+
+/** Runtime stats snapshot returned by {@link QueueService.getStats}. */
+export interface QueueStats {
+    totalQueued: number;
+    totalDispatching: number;
+    totalSent: number;
+    totalFailed: number;
+    totalDeadLetters: number;
+    recentRecords: DeliveryQueueRow[];
+    deadLetterRecords: DeliveryQueueRow[];
+}
 
 const DEFAULTS = {
     maxAttempts: 3,
@@ -92,7 +104,7 @@ export class QueueService {
         await Promise.allSettled(batch.map((job) => this.#processJob(job)));
     }
 
-    async #processJob(job: any): Promise<void> {
+    async #processJob(job: DeliveryQueueRow): Promise<void> {
         const attemptId = randomUUID();
         const start = Date.now();
         const startedAt = new Date(start).toISOString();
@@ -164,7 +176,7 @@ export class QueueService {
     }
 
     /** Expose stats for dashboard/metrics. */
-    getStats(limit = 50): any {
+    getStats(limit = 50): QueueStats {
         const recent = getDeliveryMetrics(limit);
         const counts = getDeliveryStateCounts();
         const deadLetters = getDeadLetters();

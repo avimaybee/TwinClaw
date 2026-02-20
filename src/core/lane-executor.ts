@@ -3,6 +3,7 @@ import { logToolCall, scrubSensitiveText } from '../utils/logger.js';
 import type { SkillRegistry } from '../services/skill-registry.js';
 import type { Skill } from '../skills/types.js';
 import type { PolicyEngine } from '../services/policy-engine.js';
+import type { McpScopeAuditAdapter } from '../types/mcp.js';
 
 /** Convert a Skill (from the registry) into the internal Tool format used by LaneExecutor. */
 function skillToTool(skill: Skill): ToolWithMetadata {
@@ -23,7 +24,7 @@ function skillToTool(skill: Skill): ToolWithMetadata {
 export interface ToolWithMetadata extends Tool {
     mcpScope?: string;
     serverId?: string;
-    adapter?: any; // McpClientAdapter but avoiding circular dep
+    adapter?: McpScopeAuditAdapter;
 }
 
 export class LaneExecutor {
@@ -50,7 +51,7 @@ export class LaneExecutor {
         }
     }
 
-    private parseArguments(args: string): any {
+    private parseArguments(args: string): Record<string, unknown> {
         try {
             return JSON.parse(args);
         } catch {
@@ -124,7 +125,7 @@ export class LaneExecutor {
                         const result = await tool.execute(args);
                         content = typeof result === 'string' ? result : JSON.stringify(result);
                         await logToolCall(toolName, args, content);
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                         const rawMessage = error instanceof Error ? error.message : String(error);
                         const sanitizedMessage = scrubSensitiveText(rawMessage);
                         console.error(`[LaneExecutor] Tool ${toolName} failed: ${sanitizedMessage}`);

@@ -94,3 +94,13 @@ export interface McpServerSnapshot {
     lastError: string | null;
     health: McpHealthSnapshot;
 }
+
+/**
+ * Minimal audit interface for MCP scope enforcement.
+ * Implemented by McpClientAdapter — typed here to break the circular dependency
+ * between lane-executor/skills and the services layer.
+ */
+export interface McpScopeAuditAdapter {
+    auditScopeBlock(sessionId: string | null, toolName: string, scope: string, reason: string): void;
+    auditScopeAllow(sessionId: string | null, toolName: string, scope: string): void;
+}

@@ -30,6 +30,7 @@ import type {
   RuntimeBudgetSeverity,
   RuntimeUsageStage,
 } from '../types/runtime-budget.js';
+import type { McpHealthMetrics } from '../types/mcp.js';
 
 const DB_PATH = path.resolve('memory/twinclaw.db');
 const MEMORY_EMBEDDING_DIM = Number(process.env.MEMORY_EMBEDDING_DIM ?? '1536') || 1536;
@@ -727,6 +728,30 @@ export function getCallbackReceipt(idempotencyKey: string): CallbackReceipt | un
 
 // ── Delivery Queue ────────────────────────────────────────────────────────
 
+/** DB row shape for the `delivery_queue` table. */
+export interface DeliveryQueueRow {
+  id: string;
+  platform: string;
+  chat_id: string;
+  text_payload: string;
+  state: string;
+  attempts: number;
+  created_at: string;
+  next_attempt_at: string | null;
+  resolved_at: string | null;
+}
+
+/** DB row shape for the `delivery_attempts` table. */
+export interface DeliveryAttemptRow {
+  id: string;
+  delivery_id: string;
+  attempt_number: number;
+  started_at: string;
+  completed_at: string | null;
+  error: string | null;
+  duration_ms: number | null;
+}
+
 export function enqueueDelivery(id: string, platform: string, chatId: string, textPayload: string): void {
   const stmt = db.prepare(`
     INSERT INTO delivery_queue (id, platform, chat_id, text_payload, state, attempts, next_attempt_at)
@@ -735,8 +760,8 @@ export function enqueueDelivery(id: string, platform: string, chatId: string, te
   stmt.run(id, platform, chatId, textPayload);
 }
 
-export function getDelivery(id: string): any {
-  return db.prepare('SELECT * FROM delivery_queue WHERE id = ?').get(id);
+export function getDelivery(id: string): DeliveryQueueRow | undefined {
+  return db.prepare('SELECT * FROM delivery_queue WHERE id = ?').get(id) as DeliveryQueueRow | undefined;
 }
 
 export function updateDeliveryState(id: string, state: string, resolvedAt: string | null = null): void {
@@ -757,7 +782,7 @@ export function updateDeliveryAttempts(id: string, attempts: number, nextAttempt
   stmt.run(attempts, nextAttemptAt, id);
 }
 
-export function dequeueDeliveries(limit: number): any[] {
+export function dequeueDeliveries(limit: number): DeliveryQueueRow[] {
   // Use a transaction to safely pick deliveries and mark them as 'dispatching'
   const tx = db.transaction((limit: number) => {
     const fetchStmt = db.prepare(`
@@ -767,10 +792,10 @@ export function dequeueDeliveries(limit: number): any[] {
       ORDER BY next_attempt_at ASC, created_at ASC
       LIMIT ?
     `);
-    const rows = fetchStmt.all(limit) as any[];
+    const rows = fetchStmt.all(limit) as DeliveryQueueRow[];
 
     if (rows.length > 0) {
-      const ids = rows.map((r: any) => r.id);
+      const ids = rows.map((r: DeliveryQueueRow) => r.id);
       const updateStmt = db.prepare(`
         UPDATE delivery_queue
         SET state = 'dispatching',
@@ -809,12 +834,12 @@ export function recordDeliveryAttemptEnd(attemptId: string, completedAt: string,
   stmt.run(completedAt, error, durationMs, attemptId);
 }
 
-export function getDeliveryAttempts(deliveryId: string): any[] {
-  return db.prepare('SELECT * FROM delivery_attempts WHERE delivery_id = ? ORDER BY attempt_number ASC').all(deliveryId) as any[];
+export function getDeliveryAttempts(deliveryId: string): DeliveryAttemptRow[] {
+  return db.prepare('SELECT * FROM delivery_attempts WHERE delivery_id = ? ORDER BY attempt_number ASC').all(deliveryId) as DeliveryAttemptRow[];
 }
 
-export function getDeliveryMetrics(limit: number): any[] {
-  return db.prepare('SELECT * FROM delivery_queue ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
+export function getDeliveryMetrics(limit: number): DeliveryQueueRow[] {
+  return db.prepare('SELECT * FROM delivery_queue ORDER BY created_at DESC LIMIT ?').all(limit) as DeliveryQueueRow[];
 }
 
 export function getDeliveryStateCounts(): Record<string, number> {
@@ -830,12 +855,12 @@ export function getDeliveryStateCounts(): Record<string, number> {
   return counts;
 }
 
-export function getDeadLetters(): any[] {
+export function getDeadLetters(): DeliveryQueueRow[] {
   return db
     .prepare(
       "SELECT * FROM delivery_queue WHERE state = 'dead_letter' ORDER BY COALESCE(resolved_at, created_at) DESC",
     )
-    .all() as any[];
+    .all() as DeliveryQueueRow[];
 }
 
 // ── MCP Audit & Health ─────────────────────────────────────────────────────
@@ -846,7 +871,7 @@ export function saveMcpHealthEvent(input: {
   prevState: string;
   newState: string;
   reason: string;
-  metrics: any;
+  metrics: McpHealthMetrics;
 }): void {
   const stmt = db.prepare(`
     INSERT INTO mcp_health_events (id, server_id, prev_state, new_state, reason, metrics_json)

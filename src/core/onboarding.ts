@@ -5,6 +5,7 @@ import { indexConversationTurn, retrieveMemoryContext } from '../services/semant
 import { Gateway } from './gateway.js';
 import * as readline from 'readline';
 import { logThought } from '../utils/logger.js';
+import type { Message } from './types.js';
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -22,17 +23,21 @@ export async function runOnboarding() {
     const onboardingInstructions = 'This is the onboarding session. Ask the user 3 questions, one at a time, to establish their goals, routines, and how they want you to behave.';
     const context = await assembleContext(onboardingInstructions);
 
-    const messages: any[] = [
+    const messages: Message[] = [
         { role: 'system', content: context }
     ];
 
     const askModel = async () => {
         const responseMessage = await router.createChatCompletion(messages, undefined, { sessionId });
-        messages.push({ role: 'assistant', content: responseMessage.content });
-        saveMessage(Date.now().toString(), sessionId, 'assistant', responseMessage.content);
-        await indexConversationTurn(sessionId, 'assistant', responseMessage.content);
+        const responseContent = responseMessage.content ?? '';
+        if (!responseMessage.content) {
+            void logThought('[Onboarding] Model returned null content; proceeding with empty string.');
+        }
+        messages.push({ role: 'assistant', content: responseContent });
+        saveMessage(Date.now().toString(), sessionId, 'assistant', responseContent);
+        await indexConversationTurn(sessionId, 'assistant', responseContent);
 
-        console.log(`\nTwinClaw: ${responseMessage.content}`);
+        console.log(`\nTwinClaw: ${responseContent}`);
 
         rl.question('\nYou: ', async (answer) => {
             const memoryContext = await retrieveMemoryContext(sessionId, answer);

@@ -33,13 +33,13 @@ export function startTUI() {
     });
 
     // Replace console defaults
-    console.log = (...args: any[]) => {
+    console.log = (...args: unknown[]) => {
         const text = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
         logView.log(text);
         screen.render();
     };
 
-    console.error = (...args: any[]) => {
+    console.error = (...args: unknown[]) => {
         const text = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
         logView.log(`{red-fg}[ERROR]{/red-fg} ${text}`);
         screen.render();
