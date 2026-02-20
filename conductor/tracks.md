@@ -73,7 +73,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## Active Tracks
 
-- [ ] **Track 23: CLI Hardening, User Onboarding & "Doctor" Diagnostics**
+- [x] **Track 23: CLI Hardening, User Onboarding & "Doctor" Diagnostics**
   *Link: [./tracks/cli_hardening_onboarding_20260220/](./tracks/cli_hardening_onboarding_20260220/)*
   *Assignee: Agent 1*
 - [ ] **Track 28: Control Plane WebSocket Handshake & Real-Time Runtime Streaming**
