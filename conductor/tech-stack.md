@@ -13,8 +13,9 @@
 - **Intelligence Protocol:** Model Context Protocol (MCP) for standardized skill integration.
 
 ## Memory & Data Substrate
-- **Primary Database:** SQLite (`better-sqlite3`) for local message persistence and session management.
-- **Semantic Memory:** `sqlite-vec` / Pinecone for vectorized long-term factual RAG (Retrieval-Augmented Generation).
+- **Primary Database:** SQLite (`better-sqlite3`) for local message persistence, session management, and embedded vector search operations.
+- **Semantic Memory:** `sqlite-vec` (`vec0`) for vectorized long-term factual RAG (Retrieval-Augmented Generation), fully local and serverless.
+- **Embeddings:** Configurable local (`Ollama` `mxbai-embed-large`) or remote OpenAI-compatible embedding providers.
 - **State Files:** Human-readable Markdown (`soul.md`, `identity.md`, `user.md`) for personality and user-preference persistence.
 
 ## Interfaces & Communication
@@ -24,5 +25,7 @@
 
 ## Automation & Agency
 - **Browser Automation:** Playwright for headless/headed web surfing and UI interaction.
-- **Background Jobs:** `Sidequest.js` / `node-cron` for proactive task orchestration and "heartbeat" messages.
+- **Background Jobs:** `node-cron` (`JobScheduler` service) for centralized proactive task orchestration and heartbeat messages.
+- **File Watching:** `chokidar` for cross-platform local workspace and identity directory monitoring.
+- **Proactive Notifications:** `ProactiveNotifier` service bridging background events to outbound messaging platforms.
 - **System Access:** Node.js `child_process` for raw (non-sandboxed) local shell and filesystem execution.

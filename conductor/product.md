@@ -21,7 +21,10 @@ TwinClaw is a zero-cost, local-first autonomous agentic service that empowers us
 - **Multimodal Control Plane:** Support for GUI, TUI, and messaging interfaces (WhatsApp/Telegram) for flexible interaction.
 - **Autonomous Browser & Vision:** Playwright-based web surfing combined with Vision Language Models (VLM) for human-like web interaction.
 - **Persistent Semantic Memory:** SQLite-backed vector RAG (via `sqlite-vec`) ensuring the agent remembers facts, preferences, and history across sessions.
-- **Proactive Execution:** Background job orchestration using `Sidequest.js` and file watching for truly autonomous behavior.
+- **Proactive Execution:**
+  - **Background Jobs:** `node-cron` (`JobScheduler` service) for centralized proactive task orchestration and heartbeat messages.
+  - **File Watching:** `chokidar` for cross-platform local workspace and identity directory monitoring.
+  - **Proactive Notifications:** `ProactiveNotifier` service bridging background events to outbound messaging platforms.
 
 ## Design Philosophy
 - **Ease of Use:** A primary GUI ensures that installation and setup are accessible to everyone, regardless of technical background.
