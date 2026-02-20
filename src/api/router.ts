@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import express from 'express';
 import { handleHealth, type HealthDeps } from './handlers/health.js';
 import { handleBrowserSnapshot, handleBrowserClick, type BrowserDeps } from './handlers/browser.js';
@@ -37,6 +38,7 @@ import { getCallbackOutcomeCounts } from '../services/db.js';
 import { sendOk } from './shared.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { WsHub } from './websocket-hub.js';
 
 export interface ApiServerDeps {
     heartbeat: HeartbeatService;
@@ -48,6 +50,7 @@ export interface ApiServerDeps {
     budgetGovernor?: RuntimeBudgetGovernor;
     localStateBackup?: LocalStateBackupService;
     modelRouter?: ModelRouter;
+    wsHub?: WsHub;
 }
 
 const DEFAULT_PORT = 3100;
@@ -81,6 +84,12 @@ const DEFAULT_PORT = 3100;
 export function startApiServer(deps: ApiServerDeps): void {
     const app = express();
     const port = Number(process.env.API_PORT) || DEFAULT_PORT;
+    const server = createServer(app);
+
+    // Attach WebSocket hub if provided
+    if (deps.wsHub) {
+        deps.wsHub.attach(server);
+    }
 
     // ── Global Middleware ───────────────────────────────────────────────────────
     app.use(express.json());
@@ -307,13 +316,21 @@ export function startApiServer(deps: ApiServerDeps): void {
         setTimeout(() => process.exit(0), 500);
     });
 
+    app.get('/ws/metrics', (_req, res) => {
+        if (!deps.wsHub) {
+            sendError(res, 'WebSocket hub not initialized.', 503);
+            return;
+        }
+        sendOk(res, deps.wsHub.getMetrics());
+    });
+
     // ── Catch-all 404 ──────────────────────────────────────────────────────────
     app.use((_req, res) => {
         sendError(res, 'Not found.', 404);
     });
 
     // ── Start ──────────────────────────────────────────────────────────────────
-    app.listen(port, () => {
+    server.listen(port, () => {
         console.log(`[TwinClaw API] Control plane listening on http://localhost:${port}`);
         void logThought(`[API] HTTP server started on port ${port}.`);
     });
