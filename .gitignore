@@ -70,3 +70,4 @@ memory/
 .env.example
 GEMINI.md
 .gemini
+memory/

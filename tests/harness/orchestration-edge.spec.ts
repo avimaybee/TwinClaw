@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { OrchestrationService } from '../../src/services/orchestration-service.js';
-import { createSession } from '../../src/services/db.js';
+import { createOrchestrationJob, createSession, db } from '../../src/services/db.js';
 import type { DelegationBrief, DelegationRequest } from '../../src/types/orchestration.js';
 
 describe('OrchestrationService edge behavior', () => {
@@ -72,6 +72,8 @@ function buildBrief(
 
 function buildRequest(briefs: DelegationBrief[]): DelegationRequest {
   const sessionId = `test:orchestration:${randomUUID()}`;
+  // Fixture invariant: session row must exist BEFORE orchestration_jobs rows
+  // are inserted (FK: orchestration_jobs.session_id -> sessions.session_id).
   createSession(sessionId);
 
   return {
@@ -85,3 +87,49 @@ function buildRequest(briefs: DelegationBrief[]): DelegationRequest {
     briefs,
   };
 }
+
+// ── FK Integrity Regression Suite ─────────────────────────────────────────────
+// These tests guard the fixture invariant: session rows MUST be created before
+// orchestration_jobs rows. Violating this order triggers a SQLite FK error.
+
+describe('OrchestrationService FK fixture ordering', () => {
+  it('enforces session-parent FK: createOrchestrationJob without a session throws', () => {
+    const orphanSessionId = `test:orphan:${randomUUID()}`;
+    expect(() =>
+      createOrchestrationJob(randomUUID(), orphanSessionId, 'orphan-msg', '{}'),
+    ).toThrow();
+  });
+
+  it('session-first fixture ordering satisfies FK constraint', () => {
+    const sessionId = `test:fk-order:${randomUUID()}`;
+    createSession(sessionId);
+
+    expect(() =>
+      createOrchestrationJob(randomUUID(), sessionId, 'parent-msg', '{}'),
+    ).not.toThrow();
+
+    // Session row must be present in the DB
+    const row = db.prepare('SELECT session_id FROM sessions WHERE session_id = ?').get(sessionId);
+    expect(row).toBeDefined();
+  });
+
+  it('buildRequest helper creates the session before delegation jobs', () => {
+    const request = buildRequest([buildBrief('fk-guard-node')]);
+
+    // The session referenced by the request must already exist
+    const row = db
+      .prepare('SELECT session_id FROM sessions WHERE session_id = ?')
+      .get(request.sessionId);
+    expect(row).toBeDefined();
+  });
+
+  it('runDelegation completes without FK errors when fixture creates session first', async () => {
+    const service = new OrchestrationService({ maxRetryAttempts: 0 });
+    const request = buildRequest([buildBrief('fk-safe-node')]);
+
+    const result = await service.runDelegation(request, async () => 'fk-safe-output');
+
+    expect(result.hasFailures).toBe(false);
+    expect(result.jobs[0]?.state).toBe('completed');
+  });
+});

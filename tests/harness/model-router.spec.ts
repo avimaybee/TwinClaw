@@ -40,6 +40,9 @@ describe('ModelRouter failover behavior', () => {
     restoreEnv('OPENROUTER_API_KEY', envSnapshot.OPENROUTER_API_KEY);
     restoreEnv('GEMINI_API_KEY', envSnapshot.GEMINI_API_KEY);
     vi.restoreAllMocks();
+    // Reset persisted fallback mode so parallel test suites do not inherit
+    // intelligent_pacing from tests that explicitly exercise it.
+    new ModelRouter({ fallbackMode: 'aggressive_fallback' });
   });
 
   it('falls back after a 429 rate limit response', async () => {
