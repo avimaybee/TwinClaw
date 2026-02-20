@@ -75,11 +75,11 @@ export class TelegramHandler {
         await this.#bot.sendMessage(Number(chatId), text);
     }
     /**
-     * Send a synthesized voice reply as an audio/mpeg message.
-     * @param audio - Raw MP3 buffer produced by the TTS service.
+     * Send a synthesized voice reply as an audio/wav message.
+     * @param audio - Raw WAV buffer produced by the TTS service.
      */
     async sendVoice(chatId, audio) {
-        await this.#bot.sendVoice(Number(chatId), audio, {}, { contentType: 'audio/mpeg', filename: 'response.mp3' });
+        await this.#bot.sendVoice(Number(chatId), audio, {}, { contentType: 'audio/wav', filename: 'response.wav' });
     }
     /** Gracefully stop the polling loop. */
     stop() {

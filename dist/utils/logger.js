@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { getSecretVaultService } from '../services/secret-vault.js';
 function currentDateIso() {
     return new Date().toISOString().slice(0, 10);
 }
@@ -17,6 +18,14 @@ export function scrubSensitiveText(raw) {
     sanitized = sanitized.replace(/(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s\n]+/gi, '$1=[REDACTED]');
     sanitized = sanitized.replace(/Bearer\s+[A-Za-z0-9._\-]+/g, 'Bearer [REDACTED]');
     sanitized = sanitized.replace(/[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}/g, '[REDACTED_JWT]');
+    try {
+        sanitized = getSecretVaultService().redact(sanitized);
+    }
+    catch (error) {
+        // Redaction fallback keeps logger resilient in test/mocked environments.
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Logger] Secret-vault redaction skipped: ${message}`);
+    }
     return sanitized;
 }
 async function appendSection(title, body) {

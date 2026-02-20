@@ -5,8 +5,9 @@ try {
 } catch (err) {
     // dotenv-vault is optional for development
 }
-import { runOnboarding, startBasicREPL } from './core/onboarding.js';
+import { runOnboarding, runSetupWizard, startBasicREPL } from './core/onboarding.js';
 import { Gateway } from './core/gateway.js';
+import { handleDoctorCli, handleHelpCli, handleUnknownCommand } from './core/cli.js';
 import { HeartbeatService } from './core/heartbeat.js';
 import { Dispatcher } from './interfaces/dispatcher.js';
 import { TelegramHandler } from './interfaces/telegram_handler.js';
@@ -33,21 +34,40 @@ import path from 'node:path';
 
 const secretVault = getSecretVaultService();
 
+// ── Early one-shot CLI commands (bypass service startup) ─────────────────────
+
+if (handleHelpCli(process.argv.slice(2))) {
+    process.exit(process.exitCode ?? 0);
+}
+
+if (handleDoctorCli(process.argv.slice(2))) {
+    process.exit(process.exitCode ?? 0);
+}
+
 if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
     process.exit(process.exitCode ?? 0);
 }
 
-try {
-    const preflight = secretVault.assertStartupPreflight(['API_SECRET']);
-    if (preflight.warnings.length > 0) {
-        const warningSummary = preflight.warnings.join(' | ');
-        console.warn(`[TwinClaw] Secret preflight warnings: ${warningSummary}`);
-        void logThought(`[SecretVault] ${warningSummary}`);
+if (handleUnknownCommand(process.argv.slice(2))) {
+    process.exit(process.exitCode ?? 1);
+}
+
+// setup bypasses secret preflight so first-run configuration works
+const isSetupMode = process.argv[2] === 'setup';
+
+if (!isSetupMode) {
+    try {
+        const preflight = secretVault.assertStartupPreflight(['API_SECRET']);
+        if (preflight.warnings.length > 0) {
+            const warningSummary = preflight.warnings.join(' | ');
+            console.warn(`[TwinClaw] Secret preflight warnings: ${warningSummary}`);
+            void logThought(`[SecretVault] ${warningSummary}`);
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[TwinClaw] Startup blocked by secret preflight: ${message}`);
+        process.exit(1);
     }
-} catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[TwinClaw] Startup blocked by secret preflight: ${message}`);
-    process.exit(1);
 }
 
 console.log("TwinClaw Gateway Initialized.");
@@ -246,6 +266,17 @@ void fileWatcher.startAll().catch((err) => {
 // ── Control Plane HTTP API ───────────────────────────────────────────────────
 
 import { startApiServer } from './api/router.js';
+import { WsHub } from './api/websocket-hub.js';
+import { RuntimeEventProducer } from './api/runtime-event-producer.js';
+
+const wsHub = new WsHub();
+const runtimeEventProducer = new RuntimeEventProducer({
+    hub: wsHub,
+    incidentManager,
+    budgetGovernor: runtimeBudgetGovernor,
+    dispatcher: dispatcher ?? undefined,
+    modelRouter,
+});
 
 startApiServer({
     heartbeat,
@@ -257,7 +288,10 @@ startApiServer({
     budgetGovernor: runtimeBudgetGovernor,
     localStateBackup,
     modelRouter,
+    wsHub,
 });
+
+runtimeEventProducer.start();
 
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 
@@ -265,6 +299,8 @@ process.on('SIGINT', () => {
     heartbeat.stop();
     incidentManager.stop();
     localStateBackup.stop();
+    runtimeEventProducer.stop();
+    wsHub.stop();
     if (dispatcher) {
         dispatcher.queue.stop();
         dispatcher.shutdown();
@@ -279,6 +315,8 @@ process.on('SIGTERM', () => {
     heartbeat.stop();
     incidentManager.stop();
     localStateBackup.stop();
+    runtimeEventProducer.stop();
+    wsHub.stop();
     if (dispatcher) {
         dispatcher.queue.stop();
         dispatcher.shutdown();
@@ -291,7 +329,13 @@ process.on('SIGTERM', () => {
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
 
-if (process.argv.includes('--onboard')) {
+if (isSetupMode) {
+    runSetupWizard().catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[TwinClaw] Setup wizard failed: ${message}`);
+        process.exit(1);
+    });
+} else if (process.argv.includes('--onboard')) {
     runOnboarding().catch(console.error);
 } else {
     startBasicREPL(gateway);

@@ -261,7 +261,7 @@ export class BrowserService {
         const segments: string[] = [];
         let current: HTMLElement | null = element;
         while (current && current !== document.body) {
-          const parent = current.parentElement;
+          const parent: HTMLElement | null = current.parentElement;
           const tag = current.tagName.toLowerCase();
           if (!parent) {
             segments.unshift(tag);
