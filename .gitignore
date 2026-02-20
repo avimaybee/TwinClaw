@@ -47,6 +47,7 @@ pnpm-debug.log*
 *.sqlite-wal
 *.sqlite-shm
 
+# Runtime Memory & Logs (agent state, daily thought logs, SQLite)
 # Memory directory (runtime state)
 memory/
 
