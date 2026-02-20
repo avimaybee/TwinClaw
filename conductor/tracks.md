@@ -27,5 +27,5 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./tracks/gateway_control_plane_20260220/](./tracks/gateway_control_plane_20260220/)*
 - [~] **Track 8: WhatsApp Interface Adapter & Unified Dispatch Expansion** *(Owner: Agent 2)*
   *Link: [./tracks/whatsapp_dispatcher_20260220/](./tracks/whatsapp_dispatcher_20260220/)*
-- [~] **Track 9: MCP Skill Registry & External Server Integrations** *(Owner: Agent 3)*
+- [x] **Track 9: MCP Skill Registry & External Server Integrations** *(Owner: Agent 3)*
   *Link: [./tracks/mcp_skill_registry_20260220/](./tracks/mcp_skill_registry_20260220/)*
