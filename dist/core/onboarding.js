@@ -20,7 +20,7 @@ export async function runOnboarding() {
         { role: 'system', content: context }
     ];
     const askModel = async () => {
-        const responseMessage = await router.createChatCompletion(messages);
+        const responseMessage = await router.createChatCompletion(messages, undefined, { sessionId });
         messages.push({ role: 'assistant', content: responseMessage.content });
         saveMessage(Date.now().toString(), sessionId, 'assistant', responseMessage.content);
         await indexConversationTurn(sessionId, 'assistant', responseMessage.content);
@@ -40,30 +40,20 @@ export async function runOnboarding() {
     };
     await askModel();
 }
-export function startBasicREPL() {
+export function startBasicREPL(gateway) {
     console.log("TwinClaw basic REPL started.");
     void logThought('Basic REPL started.');
-    const router = new ModelRouter();
     const sessionId = 'default_repl';
     createSession(sessionId);
     rl.on('line', async (line) => {
         await logThought(`REPL input received (${line.length} chars).`);
-        saveMessage(Date.now().toString(), sessionId, 'user', line);
-        await indexConversationTurn(sessionId, 'user', line);
-        const memoryContext = await retrieveMemoryContext(sessionId, line);
-        const context = await assembleContext(memoryContext);
-        const msgs = [
-            { role: 'system', content: context },
-            { role: 'user', content: line }
-        ];
         try {
-            const response = await router.createChatCompletion(msgs);
-            console.log(`\nTwinClaw: ${response.content}\n`);
-            saveMessage(Date.now().toString(), sessionId, 'assistant', response.content);
-            await indexConversationTurn(sessionId, 'assistant', response.content);
+            const responseText = await gateway.processText(sessionId, line);
+            console.log(`\nTwinClaw: ${responseText}\n`);
         }
         catch (err) {
-            console.error("Error generating response:", err.message);
+            const message = err instanceof Error ? err.message : String(err);
+            console.error("Error generating response:", message);
         }
     });
 }

@@ -72,7 +72,8 @@ export class FileWatcherService {
             });
         }
         watcher.on('error', (err) => {
-            console.error(`[FileWatcher] Error on target '${targetId}':`, err.message);
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[FileWatcher] Error on target '${targetId}':`, message);
         });
         this.#watchers.set(targetId, watcher);
         await logThought(`[FileWatcher] Started watching '${targetId}' at ${target.directory}`);

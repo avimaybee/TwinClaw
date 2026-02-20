@@ -246,6 +246,17 @@ void fileWatcher.startAll().catch((err) => {
 // ── Control Plane HTTP API ───────────────────────────────────────────────────
 
 import { startApiServer } from './api/router.js';
+import { WsHub } from './api/websocket-hub.js';
+import { RuntimeEventProducer } from './api/runtime-event-producer.js';
+
+const wsHub = new WsHub();
+const runtimeEventProducer = new RuntimeEventProducer({
+    hub: wsHub,
+    incidentManager,
+    budgetGovernor: runtimeBudgetGovernor,
+    dispatcher: dispatcher ?? undefined,
+    modelRouter,
+});
 
 startApiServer({
     heartbeat,
@@ -257,7 +268,10 @@ startApiServer({
     budgetGovernor: runtimeBudgetGovernor,
     localStateBackup,
     modelRouter,
+    wsHub,
 });
+
+runtimeEventProducer.start();
 
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 
@@ -265,6 +279,8 @@ process.on('SIGINT', () => {
     heartbeat.stop();
     incidentManager.stop();
     localStateBackup.stop();
+    runtimeEventProducer.stop();
+    wsHub.stop();
     if (dispatcher) {
         dispatcher.queue.stop();
         dispatcher.shutdown();
@@ -279,6 +295,8 @@ process.on('SIGTERM', () => {
     heartbeat.stop();
     incidentManager.stop();
     localStateBackup.stop();
+    runtimeEventProducer.stop();
+    wsHub.stop();
     if (dispatcher) {
         dispatcher.queue.stop();
         dispatcher.shutdown();
