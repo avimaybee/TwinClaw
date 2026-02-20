@@ -18,14 +18,16 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/proactive_execution_20260220/](./archive/proactive_execution_20260220/)*
 - [x] **Track 6: Graphical & Terminal User Interfaces**
   *Link: [./archive/user_interfaces_20260220/](./archive/user_interfaces_20260220/)*
+- [x] **Track 7: Gateway Control Plane & Lane Runtime**
+  *Link: [./archive/gateway_control_plane_20260220/](./archive/gateway_control_plane_20260220/)*
+- [x] **Track 8: WhatsApp Interface Adapter & Unified Dispatch Expansion**
+  *Link: [./archive/whatsapp_dispatcher_20260220/](./archive/whatsapp_dispatcher_20260220/)*
+- [x] **Track 9: MCP Skill Registry & External Server Integrations**
+  *Link: [./archive/mcp_skill_registry_20260220/](./archive/mcp_skill_registry_20260220/)*
 
 ---
 
 ## Active Tracks
 
-- [x] **Track 7: Gateway Control Plane & Lane Runtime** *(Owner: Lead Agent / Copilot)*
-  *Link: [./tracks/gateway_control_plane_20260220/](./tracks/gateway_control_plane_20260220/)*
-- [~] **Track 8: WhatsApp Interface Adapter & Unified Dispatch Expansion** *(Owner: Agent 2)*
-  *Link: [./tracks/whatsapp_dispatcher_20260220/](./tracks/whatsapp_dispatcher_20260220/)*
-- [x] **Track 9: MCP Skill Registry & External Server Integrations** *(Owner: Agent 3)*
-  *Link: [./tracks/mcp_skill_registry_20260220/](./tracks/mcp_skill_registry_20260220/)*
+*No active tracks at the moment.*
+
