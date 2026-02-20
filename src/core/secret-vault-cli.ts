@@ -1,4 +1,5 @@
 import { getSecretVaultService, type SecretVaultService } from '../services/secret-vault.js';
+import { validateRuntimeConfig } from '../config/env-validator.js';
 import type { SecretScope, SecretSource } from '../types/secret-vault.js';
 
 function readOption(args: string[], flag: string): string | undefined {
@@ -35,7 +36,8 @@ function printUsage(): void {
   secret doctor
   secret set <NAME> <VALUE> [--scope <scope>] [--source <source>] [--required] [--rotation-hours <n>] [--warning-hours <n>] [--expires-at <ISO8601>]
   secret rotate <NAME> <NEXT_VALUE> [--reason <text>] [--rotation-hours <n>] [--warning-hours <n>] [--expires-at <ISO8601>]
-  secret revoke <NAME> [--reason <text>]`);
+  secret revoke <NAME> [--reason <text>]
+  config doctor`);
 }
 
 function runList(service: SecretVaultService): void {
@@ -137,15 +139,73 @@ function runRevoke(service: SecretVaultService, args: string[]): void {
   console.log(`Secret '${metadata.name}' revoked.`);
 }
 
+function runConfigDoctor(): void {
+  const result = validateRuntimeConfig();
+  const overallStatus = result.ok ? 'ok' : 'degraded';
+
+  console.log(`Config validation status: ${overallStatus}`);
+  console.log(`Validated at: ${result.validatedAt}`);
+  console.log(`Present keys (${result.presentKeys.length}): ${result.presentKeys.join(', ') || 'none'}`);
+
+  if (result.activeFeatures.length > 0) {
+    console.log(`Active features: ${result.activeFeatures.join(', ')}`);
+  }
+
+  if (result.issues.length === 0) {
+    console.log('No config issues detected.');
+    return;
+  }
+
+  if (result.fatalIssues.length > 0) {
+    console.log(`\nFatal issues (${result.fatalIssues.length}):`);
+    for (const issue of result.fatalIssues) {
+      console.log(`  [${issue.key}] ${issue.message}`);
+      console.log(`    Remediation: ${issue.remediation}`);
+    }
+  }
+
+  const nonFatal = result.issues.filter((i) => i.class !== 'missing_required');
+  if (nonFatal.length > 0) {
+    console.log(`\nWarnings (${nonFatal.length}):`);
+    for (const issue of nonFatal) {
+      console.log(`  [${issue.class}] [${issue.key}] ${issue.message}`);
+      console.log(`    Remediation: ${issue.remediation}`);
+    }
+  }
+}
+
 /**
- * Handles one-shot secret CLI workflows.
+ * Handles one-shot secret and config CLI workflows.
  * Returns true when invocation was recognized (handled or failed), false otherwise.
  */
 export function handleSecretVaultCli(
   argv: string[],
   service: SecretVaultService = getSecretVaultService(),
 ): boolean {
-  if (argv[0] !== 'secret') {
+  const topCommand = argv[0];
+
+  // ── config subcommands ─────────────────────────────────────────────────────
+  if (topCommand === 'config') {
+    const subcommand = argv[1];
+    try {
+      switch (subcommand) {
+        case 'doctor':
+          runConfigDoctor();
+          return true;
+        default:
+          console.log('Config commands:\n  config doctor');
+          process.exitCode = 1;
+          return true;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Config command failed: ${message}`);
+      process.exitCode = 1;
+      return true;
+    }
+  }
+
+  if (topCommand !== 'secret') {
     return false;
   }
 
