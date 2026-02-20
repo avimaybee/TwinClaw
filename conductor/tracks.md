@@ -30,6 +30,8 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/control_plane_api_endpoints_20260220/](./archive/control_plane_api_endpoints_20260220/)*
 - [x] **Track 12: Reliability, Replay Evaluation & Guardrail Test Harness**
   *Link: [./archive/reliability_evaluation_harness_20260220/](./archive/reliability_evaluation_harness_20260220/)*
+- [x] **Track 14: Interface Reliability Pipeline & Callback Recovery**
+  *Link: [./archive/interface_reliability_pipeline_20260220/](./archive/interface_reliability_pipeline_20260220/)*
 
 ---
 
@@ -37,8 +39,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [~] **Track 13: Delegation DAG Planner & Dependency-Aware Execution** _(Assigned: Copilot / Lead Agent — highest complexity)_
   *Link: [./tracks/delegation_dag_runtime_20260220/](./tracks/delegation_dag_runtime_20260220/)*
-- [x] **Track 14: Interface Reliability Pipeline & Callback Recovery**
-  *Link: [./archive/interface_reliability_pipeline_20260220/](./archive/interface_reliability_pipeline_20260220/)*
+
 - [~] **Track 15: Policy-Aware Tool Governance & Permission Profiles** _(Assigned: Agent 3)_
   *Link: [./tracks/tool_policy_governance_20260220/](./tracks/tool_policy_governance_20260220/)*
 
