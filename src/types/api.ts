@@ -19,6 +19,7 @@ import type {
     RuntimeProviderUsageAggregate,
 } from './runtime-budget.js';
 import type { ModelRoutingFallbackMode, ModelRoutingTelemetrySnapshot } from './model-routing.js';
+import type { ReadinessSummary } from './health-doctor.js';
 
 export interface ApiEnvelope<T = unknown> {
     ok: boolean;
@@ -35,6 +36,7 @@ export interface HealthData {
     uptimeSec: number;
     memoryUsageMb: number;
     heartbeat: { running: boolean };
+    readiness?: ReadinessSummary;
     skills: { builtin: number; mcp: number; total: number };
     skillPackages: {
         installed: number;

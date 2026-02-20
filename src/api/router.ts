@@ -1,5 +1,6 @@
 import express from 'express';
 import { handleHealth, type HealthDeps } from './handlers/health.js';
+import { handleReadiness, handleDoctor } from './handlers/readiness.js';
 import { handleBrowserSnapshot, handleBrowserClick, type BrowserDeps } from './handlers/browser.js';
 import { handleWebhookCallback, type CallbackDeps } from './handlers/callback.js';
 import {
@@ -57,6 +58,8 @@ const DEFAULT_PORT = 3100;
  *
  * Endpoints:
  *   GET  /health              — System health snapshot
+ *   GET  /readiness           — Minimal readiness probe (for load balancers)
+ *   GET  /doctor              — Full diagnostic report with remediation guidance
  *   GET  /backup/diagnostics  — Local backup + restore diagnostics
  *   POST /backup/snapshot     — Trigger manual local-state snapshot
  *   POST /backup/restore      — Restore local-state snapshot (dry-run supported)
@@ -96,6 +99,17 @@ export function startApiServer(deps: ApiServerDeps): void {
         budgetGovernor: deps.budgetGovernor,
         localStateBackup: deps.localStateBackup,
         modelRouter: deps.modelRouter,
+        queue: deps.dispatcher?.queue,
+        incidentManager: deps.incidentManager,
+    };
+
+    const readinessDeps = {
+        heartbeat: deps.heartbeat,
+        skillRegistry: deps.skillRegistry,
+        mcpManager: deps.mcpManager,
+        queue: deps.dispatcher?.queue,
+        modelRouter: deps.modelRouter,
+        incidentManager: deps.incidentManager,
     };
 
     const browserDeps: BrowserDeps = { browserService };
@@ -108,6 +122,8 @@ export function startApiServer(deps: ApiServerDeps): void {
 
     // ── Routes ──────────────────────────────────────────────────────────────────
     app.get('/health', handleHealth(healthDeps));
+    app.get('/readiness', handleReadiness(readinessDeps));
+    app.get('/doctor', handleDoctor(readinessDeps));
     app.get('/backup/diagnostics', handleLocalStateBackupDiagnostics(localStateBackupDeps));
     app.post('/backup/snapshot', handleLocalStateCreateSnapshot(localStateBackupDeps));
     app.post('/backup/restore', handleLocalStateRestoreSnapshot(localStateBackupDeps));

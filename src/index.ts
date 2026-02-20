@@ -8,6 +8,7 @@ try {
 import { runOnboarding, startBasicREPL } from './core/onboarding.js';
 import { Gateway } from './core/gateway.js';
 import { HeartbeatService } from './core/heartbeat.js';
+import { handleDoctorCli } from './core/doctor-cli.js';
 import { Dispatcher } from './interfaces/dispatcher.js';
 import { TelegramHandler } from './interfaces/telegram_handler.js';
 import { WhatsAppHandler } from './interfaces/whatsapp_handler.js';
@@ -34,6 +35,11 @@ import path from 'node:path';
 const secretVault = getSecretVaultService();
 
 if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
+    process.exit(process.exitCode ?? 0);
+}
+
+// Doctor CLI runs before the full runtime — only requires DB + secrets
+if (await handleDoctorCli(process.argv.slice(2))) {
     process.exit(process.exitCode ?? 0);
 }
 

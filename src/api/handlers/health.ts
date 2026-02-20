@@ -6,7 +6,10 @@ import type { HeartbeatService } from '../../core/heartbeat.js';
 import type { RuntimeBudgetGovernor } from '../../services/runtime-budget-governor.js';
 import type { LocalStateBackupService } from '../../services/local-state-backup.js';
 import type { ModelRouter } from '../../services/model-router.js';
+import type { QueueService } from '../../services/queue-service.js';
+import type { IncidentManager } from '../../services/incident-manager.js';
 import { getSecretVaultService } from '../../services/secret-vault.js';
+import { DoctorService } from '../../core/doctor.js';
 import { sendOk } from '../shared.js';
 
 const startTime = Date.now();
@@ -18,6 +21,8 @@ export interface HealthDeps {
     budgetGovernor?: RuntimeBudgetGovernor;
     localStateBackup?: LocalStateBackupService;
     modelRouter?: ModelRouter;
+    queue?: QueueService;
+    incidentManager?: IncidentManager;
 }
 
 /** GET /health — Returns system health status and subsystem summaries. */
@@ -36,6 +41,17 @@ export function handleHealth(deps: HealthDeps) {
             .listJobs()
             .some((j) => j.status === 'running');
 
+        // Run the doctor for a unified readiness summary
+        const doctor = new DoctorService({
+            heartbeat: deps.heartbeat,
+            skillRegistry: deps.skillRegistry,
+            mcpManager: deps.mcpManager,
+            queue: deps.queue,
+            modelRouter: deps.modelRouter,
+            incidentManager: deps.incidentManager,
+        });
+        const doctorReport = await doctor.runAll();
+
         const data: HealthData = {
             status:
                 servers.some((s) => s.state === 'error') ||
@@ -49,6 +65,7 @@ export function handleHealth(deps: HealthDeps) {
             uptimeSec: Math.floor((Date.now() - startTime) / 1000),
             memoryUsageMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
             heartbeat: { running: heartbeatRunning },
+            readiness: doctorReport.readiness,
             skills: {
                 builtin: summary.builtin ?? 0,
                 mcp: summary.mcp ?? 0,
