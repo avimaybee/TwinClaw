@@ -59,7 +59,9 @@ const MAX_PERSONA_FIELD_LENGTH = 120_000;
 const DEFAULT_FS_ADAPTER: PersonaStateFsAdapter = {
   access,
   copyFile,
-  mkdir,
+  mkdir: async (targetPath, options) => {
+    await mkdir(targetPath, options);
+  },
   readFile,
   rename,
   rm: async (targetPath, options) => {
@@ -219,7 +221,7 @@ export class PersonaStateService {
     }
 
     return {
-      expectedRevision: input.expectedRevision,
+      expectedRevision: input.expectedRevision as string,
       soul,
       identity,
       user,
