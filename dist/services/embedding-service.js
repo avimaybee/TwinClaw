@@ -1,3 +1,4 @@
+import { getSecretVaultService } from './secret-vault.js';
 const DEFAULT_OPENAI_URL = 'https://api.openai.com/v1/embeddings';
 const DEFAULT_OPENAI_MODEL = 'text-embedding-3-small';
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
@@ -52,7 +53,8 @@ export class EmbeddingService {
         return ['openai', 'ollama'];
     }
     async embedWithOpenAI(input) {
-        const apiKey = process.env.EMBEDDING_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
+        const secretVault = getSecretVaultService();
+        const apiKey = secretVault.readSecret('EMBEDDING_API_KEY') ?? secretVault.readSecret('OPENAI_API_KEY') ?? '';
         if (!apiKey) {
             throw new Error('Missing EMBEDDING_API_KEY or OPENAI_API_KEY.');
         }
