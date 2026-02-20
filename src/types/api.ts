@@ -28,6 +28,24 @@ export interface ApiEnvelope<T = unknown> {
     timestamp: string;
 }
 
+// ── Config / Env Validation ──────────────────────────────────────────────────
+
+export interface ConfigIssueData {
+    key: string;
+    class: 'missing_required' | 'missing_conditional' | 'format_error';
+    message: string;
+    remediation: string;
+}
+
+export interface ConfigValidationData {
+    ok: boolean;
+    presentKeys: string[];
+    issues: ConfigIssueData[];
+    activeFeatures: string[];
+    fatalIssues: ConfigIssueData[];
+    validatedAt: string;
+}
+
 // ── Health ──────────────────────────────────────────────────────────────────
 
 export interface HealthData {

@@ -28,6 +28,7 @@ import { PolicyEngine } from './services/policy-engine.js';
 import { savePolicyAuditLog } from './services/db.js';
 import { getSecretVaultService } from './services/secret-vault.js';
 import { handleSecretVaultCli } from './core/secret-vault-cli.js';
+import { assertRuntimeConfig, validateRuntimeConfig } from './config/env-validator.js';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
@@ -38,16 +39,45 @@ if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
 }
 
 try {
+    // Secret-vault preflight: ensures the vault and required secrets are healthy.
     const preflight = secretVault.assertStartupPreflight(['API_SECRET']);
     if (preflight.warnings.length > 0) {
         const warningSummary = preflight.warnings.join(' | ');
         console.warn(`[TwinClaw] Secret preflight warnings: ${warningSummary}`);
         void logThought(`[SecretVault] ${warningSummary}`);
     }
+
+    // Unified config validation: checks required keys, format constraints, and
+    // surfaces actionable warnings for active-feature conditional keys.
+    const configResult = assertRuntimeConfig();
+    if (configResult.issues.length > 0) {
+        const warnMessages = configResult.issues
+            .filter((i) => i.class !== 'missing_required')
+            .map((i) => `[${i.key}] ${i.message} Hint: ${i.remediation}`)
+            .join('\n');
+        if (warnMessages) {
+            console.warn(`[TwinClaw] Config warnings:\n${warnMessages}`);
+            void logThought(`[Config] Startup config warnings: ${warnMessages}`);
+        }
+    }
 } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[TwinClaw] Startup blocked by secret preflight: ${message}`);
+    console.error(`[TwinClaw] Startup blocked by config preflight: ${message}`);
     process.exit(1);
+}
+
+// Non-fatal model key check: warn if no model API key is configured.
+{
+    const modelCheck = validateRuntimeConfig();
+    const hasNoModel = !modelCheck.presentKeys.some((k) =>
+        k === 'MODAL_API_KEY' || k === 'OPENROUTER_API_KEY' || k === 'GEMINI_API_KEY',
+    );
+    if (hasNoModel) {
+        console.warn(
+            '[TwinClaw] No model API key configured (MODAL_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY). ' +
+            'AI functionality will fail. Set at least one model API key.',
+        );
+    }
 }
 
 console.log("TwinClaw Gateway Initialized.");

@@ -20,6 +20,7 @@ import {
     handlePersonaStateUpdate,
     type PersonaStateDeps,
 } from './handlers/persona-state.js';
+import { handleConfigValidate } from './handlers/config-validate.js';
 import { requestLogger, requireSignature, sendError } from './shared.js';
 import { BrowserService } from '../services/browser-service.js';
 import type { SkillRegistry } from '../services/skill-registry.js';
@@ -57,6 +58,7 @@ const DEFAULT_PORT = 3100;
  *
  * Endpoints:
  *   GET  /health              — System health snapshot
+ *   GET  /config/validate     — Runtime config and env-key validation report
  *   GET  /backup/diagnostics  — Local backup + restore diagnostics
  *   POST /backup/snapshot     — Trigger manual local-state snapshot
  *   POST /backup/restore      — Restore local-state snapshot (dry-run supported)
@@ -108,6 +110,7 @@ export function startApiServer(deps: ApiServerDeps): void {
 
     // ── Routes ──────────────────────────────────────────────────────────────────
     app.get('/health', handleHealth(healthDeps));
+    app.get('/config/validate', handleConfigValidate());
     app.get('/backup/diagnostics', handleLocalStateBackupDiagnostics(localStateBackupDeps));
     app.post('/backup/snapshot', handleLocalStateCreateSnapshot(localStateBackupDeps));
     app.post('/backup/restore', handleLocalStateRestoreSnapshot(localStateBackupDeps));
