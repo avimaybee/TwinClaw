@@ -1,0 +1,8 @@
+{
+  "track_id": "gui_runtime_dashboard_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:05:00Z",
+  "updated_at": "2026-02-20T16:05:00Z",
+  "description": "Upgrade GUI from static scaffolded panels to a live control-plane dashboard reflecting runtime health, reliability telemetry, and operational controls."
+}

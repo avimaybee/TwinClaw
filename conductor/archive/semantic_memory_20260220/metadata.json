@@ -1,0 +1,8 @@
+{
+  "track_id": "semantic_memory_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T14:36:00Z",
+  "updated_at": "2026-02-20T14:36:00Z",
+  "description": "Implement long-term factual memory using sqlite-vec for KNN search, giving TwinClaw persistent recall without external vector database services."
+}

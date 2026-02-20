@@ -79,9 +79,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track 28: Control Plane WebSocket Handshake & Real-Time Runtime Streaming**
   *Link: [./tracks/control_plane_websocket_streaming_20260220/](./tracks/control_plane_websocket_streaming_20260220/)*
   *Assignee: Agent 5*
-- [~] **Track 29: Runtime Economics, Budget Guardrails & Adaptive Quality Profiles**
+- [x] **Track 29: Runtime Economics, Budget Guardrails & Adaptive Quality Profiles**
   *Link: [./tracks/runtime_budget_governance_20260220/](./tracks/runtime_budget_governance_20260220/)*
-  *Assignee: Agent 3 (current agent)*
 - [ ] **Track 35: Build Contract Recovery & Compile Unblock**
   *Link: [./tracks/build_contract_recovery_20260220/](./tracks/build_contract_recovery_20260220/)*
   *Assignee: Agent 6*
@@ -103,7 +102,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track 41: Runtime Health, Doctor & Readiness Surfaces**
   *Link: [./tracks/runtime_health_doctor_20260220/](./tracks/runtime_health_doctor_20260220/)*
   *Assignee: Agent 12*
-- [ ] **Track 42: Conductor Track Status Reconciliation & Recovery**
+- [x] **Track 42: Conductor Track Status Reconciliation & Recovery**
   *Link: [./tracks/track_status_reconciliation_20260220/](./tracks/track_status_reconciliation_20260220/)*
   *Assignee: Agent 13*
 - [ ] **Track 43: Coverage Gap Closure for Messaging/MCP/Proactive/Observability**

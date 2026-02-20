@@ -1,0 +1,8 @@
+{
+  "track_id": "browser_ref_mapping_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:55:00Z",
+  "updated_at": "2026-02-20T16:55:00Z",
+  "description": "Align browser control-plane behavior with PRD requirements by introducing deterministic accessibility-reference mapping in snapshots and first-class click-by-reference actions."
+}

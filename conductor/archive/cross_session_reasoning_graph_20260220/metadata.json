@@ -1,0 +1,8 @@
+{
+  "track_id": "cross_session_reasoning_graph_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:10:00Z",
+  "updated_at": "2026-02-20T16:10:00Z",
+  "description": "Introduce structured reasoning graph linking entities, claims, and tool outputs across sessions for evidence-aware retrieval."
+}

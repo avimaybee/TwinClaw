@@ -1,0 +1,8 @@
+{
+  "track_id": "secrets_vault_rotation_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:40:00Z",
+  "updated_at": "2026-02-20T16:40:00Z",
+  "description": "Add secure secret-management layer with rotation workflows and strict redaction rules to prevent key leakage in logs, prompts, and diagnostics."
+}

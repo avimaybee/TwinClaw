@@ -1,0 +1,8 @@
+{
+  "track_id": "release_pipeline_rollback_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:30:00Z",
+  "updated_at": "2026-02-20T16:30:00Z",
+  "description": "Formalize safe release operations with reproducible preflight checks, staging smoke validation, and deterministic rollback tooling."
+}

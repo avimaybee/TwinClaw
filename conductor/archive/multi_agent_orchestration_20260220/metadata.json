@@ -1,0 +1,8 @@
+{
+  "track_id": "multi_agent_orchestration_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T15:05:00Z",
+  "updated_at": "2026-02-20T15:05:00Z",
+  "description": "Introduce first-class orchestration runtime for spawning, supervising, and reconciling sub-agent work while keeping the gateway deterministic and auditable."
+}
