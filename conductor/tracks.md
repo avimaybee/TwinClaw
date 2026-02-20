@@ -24,16 +24,21 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/whatsapp_dispatcher_20260220/](./archive/whatsapp_dispatcher_20260220/)*
 - [x] **Track 9: MCP Skill Registry & External Server Integrations**
   *Link: [./archive/mcp_skill_registry_20260220/](./archive/mcp_skill_registry_20260220/)*
+- [x] **Track 10: Multi-Agent Orchestration & Delegation Runtime**
+  *Link: [./archive/multi_agent_orchestration_20260220/](./archive/multi_agent_orchestration_20260220/)*
 - [x] **Track 11: Control Plane HTTP API & Webhook Callback Layer**
   *Link: [./archive/control_plane_api_endpoints_20260220/](./archive/control_plane_api_endpoints_20260220/)*
+- [x] **Track 12: Reliability, Replay Evaluation & Guardrail Test Harness**
+  *Link: [./archive/reliability_evaluation_harness_20260220/](./archive/reliability_evaluation_harness_20260220/)*
 
 ---
 
 ## Active Tracks
 
-- [~] **Track 10: Multi-Agent Orchestration & Delegation Runtime** _(Assigned: Copilot / Lead Agent — highest complexity)_
-  *Link: [./tracks/multi_agent_orchestration_20260220/](./tracks/multi_agent_orchestration_20260220/)*
-
-- [~] **Track 12: Reliability, Replay Evaluation & Guardrail Test Harness** _(Assigned: Agent 3)_
-  *Link: [./tracks/reliability_evaluation_harness_20260220/](./tracks/reliability_evaluation_harness_20260220/)*
+- [~] **Track 13: Delegation DAG Planner & Dependency-Aware Execution** _(Assigned: Copilot / Lead Agent — highest complexity)_
+  *Link: [./tracks/delegation_dag_runtime_20260220/](./tracks/delegation_dag_runtime_20260220/)*
+- [x] **Track 14: Interface Reliability Pipeline & Callback Recovery**
+  *Link: [./archive/interface_reliability_pipeline_20260220/](./archive/interface_reliability_pipeline_20260220/)*
+- [~] **Track 15: Policy-Aware Tool Governance & Permission Profiles** _(Assigned: Agent 3)_
+  *Link: [./tracks/tool_policy_governance_20260220/](./tracks/tool_policy_governance_20260220/)*
 
