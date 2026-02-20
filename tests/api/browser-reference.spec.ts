@@ -9,6 +9,7 @@ import { BrowserReferenceError } from '../../src/services/browser-service.js';
 
 vi.mock('../../src/utils/logger.js', () => ({
   logThought: vi.fn().mockResolvedValue(undefined),
+  scrubSensitiveText: (s: string) => s,
 }));
 
 describe('browser reference API handlers', () => {

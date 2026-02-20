@@ -54,9 +54,14 @@ memory/
 # Deployment & Runtime Temp
 tmpclaude?*
 
+<<<<<<< HEAD
 # Runtime artifacts (generated at runtime, not source)
 memory/mvp-gate/
 memory/release-pipeline/
+=======
+# Runtime logs & agent memory
+memory/
+>>>>>>> origin/copilot/implement-npm-command-reliability
 # If you use Railway or Vercel, consider:
 # .railway/
 # .vercel/

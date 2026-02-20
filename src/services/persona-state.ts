@@ -34,6 +34,7 @@ interface PersonaWritePlan {
   backupPath: string;
   hadOriginal: boolean;
   applied: boolean;
+  originalRemoved: boolean;
 }
 
 export interface PersonaStateFsAdapter {
@@ -160,12 +161,14 @@ export class PersonaStateService {
         backupPath,
         hadOriginal,
         applied: false,
+        originalRemoved: false,
       });
     }
 
     try {
       for (const plan of plans) {
         await this.#removePathIfExists(plan.targetPath);
+        plan.originalRemoved = true;
         await this.#fs.rename(plan.tempPath, plan.targetPath);
         plan.applied = true;
       }
@@ -248,7 +251,7 @@ export class PersonaStateService {
     const reversePlans = [...plans].reverse();
 
     for (const plan of reversePlans) {
-      if (plan.applied) {
+      if (plan.applied || plan.originalRemoved) {
         if (plan.hadOriginal) {
           warnings.push(...(await this.#removePathIfExists(plan.targetPath)));
           try {

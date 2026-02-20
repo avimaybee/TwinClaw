@@ -620,7 +620,7 @@ export class SkillPackageManager {
     this.#assertCompatibility(selected);
 
     const nextLock = this.#buildLockfileFromSelection(selected, currentLock);
-    const changed = this.#serializeLockfile(currentLock) !== this.#serializeLockfile(nextLock);
+    const changed = this.#serializePackagesOnly(currentLock) !== this.#serializePackagesOnly(nextLock);
     await this.#persistLockfileWithRollback(currentLock, nextLock);
 
     const diagnostics = await this.getDiagnostics();
@@ -656,7 +656,7 @@ export class SkillPackageManager {
     this.#assertCompatibility(selected);
 
     const nextLock = this.#buildLockfileFromSelection(selected, currentLock);
-    const changed = this.#serializeLockfile(currentLock) !== this.#serializeLockfile(nextLock);
+    const changed = this.#serializePackagesOnly(currentLock) !== this.#serializePackagesOnly(nextLock);
     await this.#persistLockfileWithRollback(currentLock, nextLock);
 
     const diagnostics = await this.getDiagnostics();
@@ -698,7 +698,7 @@ export class SkillPackageManager {
       generatedAt: new Date().toISOString(),
       packages: nextPackages,
     });
-    const changed = this.#serializeLockfile(currentLock) !== this.#serializeLockfile(nextLock);
+    const changed = this.#serializePackagesOnly(currentLock) !== this.#serializePackagesOnly(nextLock);
     await this.#persistLockfileWithRollback(currentLock, nextLock);
 
     const diagnostics = await this.getDiagnostics();
@@ -731,7 +731,19 @@ export class SkillPackageManager {
       return solved;
     }
 
-    const conflict = findSolverConflict(constraints, manifestIndex);
+    // Expand constraints greedily (pick best candidate per package) to expose transitive conflicts
+    const tentativeSelected = new Map<string, SkillPackageManifest>();
+    for (const [name, ranges] of constraints) {
+      const best = (manifestIndex.get(name) ?? []).find((c) =>
+        ranges.every((r) => satisfiesRange(c.version, r)),
+      );
+      if (best) {
+        tentativeSelected.set(name, best);
+      }
+    }
+    const expandedConstraints = expandConstraintsWithDependencies(constraints, tentativeSelected);
+
+    const conflict = findSolverConflict(expandedConstraints, manifestIndex);
     if (conflict) {
       const availableText =
         conflict.available.length > 0 ? conflict.available.join(', ') : '(none)';
@@ -1002,7 +1014,11 @@ export class SkillPackageManager {
 
     return normalizeLockfile({
       version: LOCKFILE_VERSION,
-      generatedAt: now,
+      generatedAt:
+        this.#serializePackagesOnly({ version: LOCKFILE_VERSION, generatedAt: '', packages }) ===
+        this.#serializePackagesOnly(currentLock)
+          ? currentLock.generatedAt
+          : now,
       packages,
     });
   }
@@ -1067,6 +1083,10 @@ export class SkillPackageManager {
 
   #serializeLockfile(lockfile: SkillPackageLockfile): string {
     return `${JSON.stringify(normalizeLockfile(lockfile), null, 2)}\n`;
+  }
+
+  #serializePackagesOnly(lockfile: SkillPackageLockfile): string {
+    return JSON.stringify(normalizeLockfile(lockfile).packages);
   }
 
   async #readCatalog(): Promise<SkillPackageCatalog> {

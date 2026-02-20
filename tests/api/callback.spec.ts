@@ -9,13 +9,17 @@ import { recordCallbackReceipt, getCallbackReceipt } from '../../src/services/db
 // Mock DB and Gateway
 vi.mock('../../src/services/db.js', () => {
     return {
+        db: null,
         recordCallbackReceipt: vi.fn(),
         getCallbackReceipt: vi.fn(),
+        getDelivery: vi.fn().mockReturnValue(null),
+        updateDeliveryState: vi.fn(),
     };
 });
 
 vi.mock('../../src/utils/logger.js', () => ({
-    logThought: vi.fn()
+    logThought: vi.fn(),
+    scrubSensitiveText: (s: string) => s,
 }));
 
 const mockGateway = {

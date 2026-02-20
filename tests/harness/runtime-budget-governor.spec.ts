@@ -28,9 +28,15 @@ vi.mock('../../src/utils/logger.js', () => ({
 }));
 
 describe('RuntimeBudgetGovernor', () => {
+  const budgetStateStore = new Map<string, string>();
+
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getRuntimeBudgetState).mockReturnValue(null);
+    budgetStateStore.clear();
+    vi.mocked(setRuntimeBudgetState).mockImplementation((key: string, value: string) => {
+      budgetStateStore.set(key, value);
+    });
+    vi.mocked(getRuntimeBudgetState).mockImplementation((key: string) => budgetStateStore.get(key) ?? null);
     vi.mocked(getRuntimeDailyUsageAggregate).mockReturnValue(zeroUsageRow());
     vi.mocked(getRuntimeSessionUsageAggregate).mockReturnValue(zeroUsageRow());
     vi.mocked(listRuntimeProviderUsageAggregates).mockReturnValue([]);

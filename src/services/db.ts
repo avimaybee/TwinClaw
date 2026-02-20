@@ -371,10 +371,10 @@ export function getNearestMemories(queryEmbedding: number[], topK = 5, currentSe
   const matcher = serializeEmbedding(queryEmbedding);
 
   const stmt = db.prepare(
-    'SELECT rowid AS memory_rowid, session_id, fact_text, distance FROM vec_memory WHERE embedding MATCH ? AND k = ? ORDER BY distance ASC LIMIT ?'
+    'SELECT rowid AS memory_rowid, session_id, fact_text, distance FROM vec_memory WHERE embedding MATCH ? ORDER BY distance ASC LIMIT ?'
   );
 
-  const rows = stmt.all(matcher, topK, topK * 3) as MemoryRow[];
+  const rows = stmt.all(matcher, topK * 3) as MemoryRow[];
   if (!currentSessionId) {
     return rows.slice(0, topK);
   }

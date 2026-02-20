@@ -12,6 +12,11 @@ export class MockModelRouter extends ModelRouter {
 
     private originalFetch = globalThis.fetch;
 
+    constructor() {
+        // Use aggressive_fallback + no-op sleep to avoid real wait delays in tests
+        super({ fallbackMode: 'aggressive_fallback', sleep: async () => undefined });
+    }
+
     public setMockResponses(responses: Message[]) {
         this.mockResponses = [...responses];
     }
