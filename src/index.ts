@@ -170,6 +170,7 @@ startApiServer({
     skillRegistry,
     mcpManager,
     gateway,
+    dispatcher: dispatcher ?? undefined,
 });
 
 // ── Signal Handlers ──────────────────────────────────────────────────────────

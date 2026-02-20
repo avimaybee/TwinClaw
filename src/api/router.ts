@@ -8,13 +8,16 @@ import type { SkillRegistry } from '../services/skill-registry.js';
 import type { McpServerManager } from '../services/mcp-server-manager.js';
 import type { HeartbeatService } from '../core/heartbeat.js';
 import type { Gateway } from '../core/gateway.js';
+import type { Dispatcher } from '../interfaces/dispatcher.js';
 import { logThought } from '../utils/logger.js';
+import { sendOk } from './shared.js';
 
 export interface ApiServerDeps {
     heartbeat: HeartbeatService;
     skillRegistry: SkillRegistry;
     mcpManager: McpServerManager;
     gateway: Gateway;
+    dispatcher?: Dispatcher;
 }
 
 const DEFAULT_PORT = 3100;
@@ -23,10 +26,11 @@ const DEFAULT_PORT = 3100;
  * Create and start the Control Plane HTTP API server.
  *
  * Endpoints:
- *   GET  /health            — System health snapshot
- *   POST /browser/snapshot   — Take a browser screenshot + accessibility tree
- *   POST /browser/click      — Click an element by selector or coordinates
- *   POST /callback/webhook   — Ingest external task completion events (authenticated)
+ *   GET  /health              — System health snapshot
+ *   GET  /reliability          — Delivery reliability metrics
+ *   POST /browser/snapshot     — Take a browser screenshot + accessibility tree
+ *   POST /browser/click        — Click an element by selector or coordinates
+ *   POST /callback/webhook     — Ingest external task completion events (authenticated)
  */
 export function startApiServer(deps: ApiServerDeps): void {
     const app = express();
@@ -50,6 +54,14 @@ export function startApiServer(deps: ApiServerDeps): void {
 
     // ── Routes ──────────────────────────────────────────────────────────────────
     app.get('/health', handleHealth(healthDeps));
+    app.get('/reliability', (_req, res) => {
+        const metrics = deps.dispatcher?.deliveryTracker.getMetrics();
+        if (!metrics) {
+            sendOk(res, { message: 'Dispatcher not active — no delivery data.' });
+            return;
+        }
+        sendOk(res, metrics);
+    });
     app.post('/browser/snapshot', handleBrowserSnapshot(browserDeps));
     app.post('/browser/click', handleBrowserClick(browserDeps));
     app.post('/callback/webhook', requireSignature, handleWebhookCallback(callbackDeps));
