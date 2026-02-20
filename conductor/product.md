@@ -25,6 +25,7 @@ TwinClaw is a zero-cost, local-first autonomous agentic service that empowers us
   - **Background Jobs:** `node-cron` (`JobScheduler` service) for centralized proactive task orchestration and heartbeat messages.
   - **File Watching:** `chokidar` for cross-platform local workspace and identity directory monitoring.
   - **Proactive Notifications:** `ProactiveNotifier` service bridging background events to outbound messaging platforms.
+- **MCP Skill Registry:** Extensible tool catalog supporting both local builtins and Model Context Protocol (MCP) backed external integrations (GitHub, web search, databases, browser automation, and more).
 
 ## Design Philosophy
 - **Ease of Use:** A primary GUI ensures that installation and setup are accessible to everyone, regardless of technical background.
