@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, createSession } from '../../src/services/db.js';
 
 vi.mock('../../src/services/embedding-service.js', () => {
@@ -42,6 +42,16 @@ async function loadSemanticMemory() {
 }
 
 describe('Reasoning graph memory retrieval', () => {
+  beforeAll(() => {
+    // Clean reasoning-related tables to prevent cross-run pollution affecting vector search rankings
+    db.exec(`
+      DELETE FROM memory_provenance;
+      DELETE FROM reasoning_edges;
+      DELETE FROM reasoning_nodes;
+      DELETE FROM vec_memory;
+    `);
+  });
+
   it('upserts stable reasoning nodes and links multiple memory rows to one claim', async () => {
     const { indexConversationTurn } = await loadSemanticMemory();
     const token = `graph-${randomUUID()}`;

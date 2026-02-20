@@ -261,14 +261,14 @@ export class BrowserService {
         const segments: string[] = [];
         let current: HTMLElement | null = element;
         while (current && current !== document.body) {
-          const parent = current.parentElement;
+          const parent: HTMLElement | null = current.parentElement;
           const tag = current.tagName.toLowerCase();
           if (!parent) {
             segments.unshift(tag);
             break;
           }
 
-          const siblings = Array.from(parent.children).filter((child) => child.tagName === current!.tagName);
+          const siblings = Array.from(parent.children).filter((child) => (child as Element).tagName === current!.tagName);
           const index = Math.max(1, siblings.indexOf(current) + 1);
           segments.unshift(`${tag}:nth-of-type(${index})`);
           current = parent;

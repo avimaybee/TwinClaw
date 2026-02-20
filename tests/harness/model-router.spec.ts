@@ -2,6 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelRouter } from '../../src/services/model-router.js';
 import type { Message } from '../../src/core/types.js';
 
+vi.mock('../../src/services/db.js', () => ({
+  db: null,
+  getModelRoutingSetting: vi.fn().mockReturnValue(null),
+  saveModelRoutingSetting: vi.fn(),
+  listModelRoutingEvents: vi.fn().mockReturnValue([]),
+  saveModelRoutingEvent: vi.fn(),
+  getRuntimeBudgetState: vi.fn().mockReturnValue(null),
+  setRuntimeBudgetState: vi.fn(),
+  clearRuntimeBudgetState: vi.fn(),
+  getRuntimeDailyUsageAggregate: vi.fn().mockReturnValue({ request_count: 0, request_tokens: 0, response_tokens: 0, failure_count: 0, skipped_count: 0 }),
+  getRuntimeSessionUsageAggregate: vi.fn().mockReturnValue({ request_count: 0, request_tokens: 0, response_tokens: 0, failure_count: 0, skipped_count: 0 }),
+  listRuntimeProviderUsageAggregates: vi.fn().mockReturnValue([]),
+  listRuntimeBudgetEvents: vi.fn().mockReturnValue([]),
+  recordRuntimeBudgetEvent: vi.fn(),
+  recordRuntimeUsageEvent: vi.fn(),
+}));
+
 const BASE_MESSAGES: Message[] = [{ role: 'user', content: 'hello' }];
 
 describe('ModelRouter failover behavior', () => {

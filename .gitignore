@@ -49,6 +49,9 @@ pnpm-debug.log*
 
 # Deployment & Runtime Temp
 tmpclaude?*
+
+# Runtime logs & agent memory
+memory/
 # If you use Railway or Vercel, consider:
 # .railway/
 # .vercel/

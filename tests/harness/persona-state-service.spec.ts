@@ -92,7 +92,7 @@ function createFailingFsAdapter(failOnRenameCall: number): PersonaStateFsAdapter
   return {
     access,
     copyFile,
-    mkdir,
+    mkdir: async (targetPath: string, options?: { recursive?: boolean }) => { await mkdir(targetPath, options); },
     readFile,
     rename: async (oldPath: string, newPath: string) => {
       renameCallCount += 1;

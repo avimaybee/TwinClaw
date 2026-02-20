@@ -11,7 +11,7 @@ const { Client, LocalAuth, MessageMedia } = WAWebJS;
 const RATE_LIMIT_MS = 1500;
 
 export class WhatsAppHandler {
-    readonly #client: Client;
+    readonly #client: InstanceType<typeof Client>;
     readonly #allowedPhoneNumber: string;
     #lastMessageAt: number = 0;
 
@@ -48,7 +48,7 @@ export class WhatsAppHandler {
     }
 
     #registerListeners(): void {
-        this.#client.on('qr', (qr) => {
+        this.#client.on('qr', (qr: string) => {
             console.log('[WhatsAppHandler] Scan this QR code to authenticate:');
             qrcode.generate(qr, { small: true });
         });
@@ -57,7 +57,7 @@ export class WhatsAppHandler {
             console.log('[WhatsAppHandler] Client is ready!');
         });
 
-        this.#client.on('message', async (msg) => {
+        this.#client.on('message', async (msg: WAWebJS.Message) => {
             if (!this.#isAuthorized(msg.from)) {
                 return;
             }
@@ -106,7 +106,7 @@ export class WhatsAppHandler {
             }
         });
 
-        this.#client.initialize().catch(err => {
+        this.#client.initialize().catch((err: unknown) => {
             console.error('[WhatsAppHandler] Failed to initialize client:', err);
         });
     }
@@ -121,7 +121,7 @@ export class WhatsAppHandler {
     }
 
     stop(): void {
-        this.#client.destroy().catch(err => {
+        this.#client.destroy().catch((err: unknown) => {
             console.error('[WhatsAppHandler] Failed to destroy client:', err);
         });
     }
