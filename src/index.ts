@@ -5,6 +5,7 @@ import { Gateway } from './core/gateway.js';
 import { HeartbeatService } from './core/heartbeat.js';
 import { Dispatcher } from './interfaces/dispatcher.js';
 import { TelegramHandler } from './interfaces/telegram_handler.js';
+import { WhatsAppHandler } from './interfaces/whatsapp_handler.js';
 import { FileWatcherService } from './services/file-watcher.js';
 import { ProactiveNotifier } from './services/proactive-notifier.js';
 import { SkillRegistry } from './services/skill-registry.js';
@@ -44,11 +45,40 @@ fileWatcher.addTarget({
     exclude: ['**/*.db', '**/*.db-journal'],
 });
 
+// ── MCP Skill Registry & Server Manager ──────────────────────────────────────
+
+const skillRegistry = new SkillRegistry();
+skillRegistry.registerMany(createBuiltinSkills());
+
+const mcpManager = new McpServerManager(skillRegistry);
+
+void (async () => {
+    try {
+        await mcpManager.loadConfig();
+        await mcpManager.connectAll();
+
+        const summary = skillRegistry.summary();
+        const servers = mcpManager.listServers();
+        const connectedCount = servers.filter((s) => s.state === 'connected').length;
+
+        console.log(
+            `[TwinClaw MCP] ${connectedCount}/${servers.length} servers connected | ` +
+            `${summary.builtin ?? 0} builtin + ${summary.mcp ?? 0} MCP skills registered.`,
+        );
+        await logThought(
+            `[MCP] Initialized: ${connectedCount} servers, ${summary.mcp ?? 0} MCP tools, ${summary.builtin ?? 0} builtins.`,
+        );
+    } catch (err) {
+        console.error('[TwinClaw MCP] Initialization failed:', err);
+    }
+})();
+
 // ── Gateway & Interface Dispatcher ────────────────────────────────────────────
 
-const gateway = new Gateway();
+const gateway = new Gateway(skillRegistry);
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramUserId = process.env.TELEGRAM_USER_ID;
+const whatsappPhoneNumber = process.env.WHATSAPP_PHONE_NUMBER;
 const groqApiKey = process.env.GROQ_API_KEY;
 const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
 const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
@@ -56,25 +86,35 @@ const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
 let dispatcher: Dispatcher | null = null;
 
 if (
-    telegramBotToken &&
-    telegramUserId &&
-    groqApiKey &&
-    elevenLabsApiKey &&
-    elevenLabsVoiceId
+    (telegramBotToken && telegramUserId) || whatsappPhoneNumber
 ) {
-    const parsedTelegramUserId = Number(telegramUserId);
-    if (!Number.isInteger(parsedTelegramUserId)) {
-        console.error('[TwinClaw] TELEGRAM_USER_ID must be a valid integer.');
-    } else {
-        const telegramHandler = new TelegramHandler(telegramBotToken, parsedTelegramUserId);
+    if (groqApiKey && elevenLabsApiKey && elevenLabsVoiceId) {
+        let telegramHandler: TelegramHandler | undefined;
+        let whatsappHandler: WhatsAppHandler | undefined;
+
+        if (telegramBotToken && telegramUserId) {
+            const parsedTelegramUserId = Number(telegramUserId);
+            if (!Number.isInteger(parsedTelegramUserId)) {
+                console.error('[TwinClaw] TELEGRAM_USER_ID must be a valid integer.');
+            } else {
+                telegramHandler = new TelegramHandler(telegramBotToken, parsedTelegramUserId);
+            }
+        }
+
+        if (whatsappPhoneNumber) {
+            whatsappHandler = new WhatsAppHandler(whatsappPhoneNumber);
+        }
+
         const sttService = new SttService(groqApiKey);
         const ttsService = new TtsService(elevenLabsApiKey, elevenLabsVoiceId);
-        dispatcher = new Dispatcher(telegramHandler, undefined, sttService, ttsService, gateway);
+        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway);
         void logThought('[TwinClaw] Messaging dispatcher initialized.');
+    } else {
+        console.warn('[TwinClaw] Dispatcher requires GROQ_API_KEY, ELEVENLABS_API_KEY, and ELEVENLABS_VOICE_ID.');
     }
 } else {
     console.log(
-        '[TwinClaw] Messaging dispatcher not initialized (missing TELEGRAM_BOT_TOKEN, TELEGRAM_USER_ID, GROQ_API_KEY, ELEVENLABS_API_KEY, or ELEVENLABS_VOICE_ID).',
+        '[TwinClaw] Messaging dispatcher not initialized (missing Telegram AND WhatsApp configs).',
     );
 }
 
@@ -121,33 +161,16 @@ void fileWatcher.startAll().catch((err) => {
     console.error('[TwinClaw] Failed to start file watchers:', err);
 });
 
-// ── MCP Skill Registry & Server Manager ──────────────────────────────────────
+// ── Control Plane HTTP API ───────────────────────────────────────────────────
 
-const skillRegistry = new SkillRegistry();
-skillRegistry.registerMany(createBuiltinSkills());
+import { startApiServer } from './api/router.js';
 
-const mcpManager = new McpServerManager(skillRegistry);
-
-void (async () => {
-    try {
-        await mcpManager.loadConfig();
-        await mcpManager.connectAll();
-
-        const summary = skillRegistry.summary();
-        const servers = mcpManager.listServers();
-        const connectedCount = servers.filter((s) => s.state === 'connected').length;
-
-        console.log(
-            `[TwinClaw MCP] ${connectedCount}/${servers.length} servers connected | ` +
-            `${summary.builtin ?? 0} builtin + ${summary.mcp ?? 0} MCP skills registered.`,
-        );
-        await logThought(
-            `[MCP] Initialized: ${connectedCount} servers, ${summary.mcp ?? 0} MCP tools, ${summary.builtin ?? 0} builtins.`,
-        );
-    } catch (err) {
-        console.error('[TwinClaw MCP] Initialization failed:', err);
-    }
-})();
+startApiServer({
+    heartbeat,
+    skillRegistry,
+    mcpManager,
+    gateway,
+});
 
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 
