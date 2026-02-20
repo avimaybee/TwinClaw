@@ -1,0 +1,8 @@
+{
+  "track_id": "persona_state_sync_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:35:00Z",
+  "updated_at": "2026-02-20T16:35:00Z",
+  "description": "Turn TwinClaw persona files into first-class operator-safe runtime state surfaces across control-plane APIs and GUI editing workflows."
+}

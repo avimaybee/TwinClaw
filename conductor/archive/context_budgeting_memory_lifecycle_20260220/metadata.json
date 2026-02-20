@@ -1,0 +1,8 @@
+{
+  "track_id": "context_budgeting_memory_lifecycle_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:00:00Z",
+  "updated_at": "2026-02-20T16:00:00Z",
+  "description": "Introduce budget-aware context assembly and long-session memory lifecycle management for TwinClaw under constrained model context windows."
+}

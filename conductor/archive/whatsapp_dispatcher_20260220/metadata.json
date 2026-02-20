@@ -1,0 +1,8 @@
+{
+  "track_id": "whatsapp_dispatcher_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T14:59:00Z",
+  "updated_at": "2026-02-20T14:59:00Z",
+  "description": "Add WhatsApp adapter plugging into the existing dispatcher contract so Telegram and WhatsApp share the same normalized processing pipeline."
+}

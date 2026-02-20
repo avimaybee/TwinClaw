@@ -1,0 +1,8 @@
+{
+  "track_id": "tool_policy_governance_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T15:40:00Z",
+  "updated_at": "2026-02-20T15:40:00Z",
+  "description": "Introduce policy-driven tool governance to enforce environment-aware and user-aware permission boundaries before executing high-risk skills."
+}

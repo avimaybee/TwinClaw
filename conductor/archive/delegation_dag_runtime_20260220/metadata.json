@@ -1,0 +1,8 @@
+{
+  "track_id": "delegation_dag_runtime_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T15:20:00Z",
+  "updated_at": "2026-02-20T15:20:00Z",
+  "description": "Evolve delegation into a dependency-aware execution graph for deterministic decomposition, sequencing, and recovery of complex requests."
+}

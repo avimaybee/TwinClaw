@@ -1,0 +1,8 @@
+{
+  "track_id": "delivery_queue_deadletter_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T15:50:00Z",
+  "updated_at": "2026-02-20T15:50:00Z",
+  "description": "Upgrade outbound interface reliability with durable queue-backed delivery and dead-letter recovery for process-restart safe message delivery."
+}

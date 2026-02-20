@@ -1,0 +1,8 @@
+{
+  "track_id": "skill_packaging_versioning_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:45:00Z",
+  "updated_at": "2026-02-20T16:45:00Z",
+  "description": "Standardize skill distribution with explicit package manifests, semantic versioning, compatibility checks, and lock-based pinning for reproducible deployments."
+}

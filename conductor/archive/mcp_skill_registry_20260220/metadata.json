@@ -1,0 +1,8 @@
+{
+  "track_id": "mcp_skill_registry_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T14:55:00Z",
+  "updated_at": "2026-02-20T14:55:00Z",
+  "description": "Upgrade skill subsystem into an extensible registry hosting local tools and MCP-backed remote skills under a uniform contract."
+}

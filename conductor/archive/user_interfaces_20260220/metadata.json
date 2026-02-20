@@ -1,0 +1,8 @@
+{
+  "track_id": "user_interfaces_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T14:45:00Z",
+  "updated_at": "2026-02-20T14:45:00Z",
+  "description": "Implement Terminal User Interface (TUI) and Electron/React GUI to make TwinClaw accessible and monitorable for power users and everyday users."
+}

@@ -1,0 +1,8 @@
+{
+  "track_id": "local_state_backup_recovery_20260220",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-20T16:15:00Z",
+  "updated_at": "2026-02-20T16:15:00Z",
+  "description": "Introduce local-first backup and restore workflows for TwinClaw runtime state enabling recovery from corruption, bad upgrades, or host failures."
+}
