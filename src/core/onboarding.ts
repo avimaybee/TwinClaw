@@ -28,11 +28,12 @@ export async function runOnboarding() {
 
     const askModel = async () => {
         const responseMessage = await router.createChatCompletion(messages, undefined, { sessionId });
-        messages.push({ role: 'assistant', content: responseMessage.content });
-        saveMessage(Date.now().toString(), sessionId, 'assistant', responseMessage.content);
-        await indexConversationTurn(sessionId, 'assistant', responseMessage.content);
+        const responseContent = responseMessage.content ?? '';
+        messages.push({ role: 'assistant', content: responseContent });
+        saveMessage(Date.now().toString(), sessionId, 'assistant', responseContent);
+        await indexConversationTurn(sessionId, 'assistant', responseContent);
 
-        console.log(`\nTwinClaw: ${responseMessage.content}`);
+        console.log(`\nTwinClaw: ${responseContent}`);
 
         rl.question('\nYou: ', async (answer) => {
             const memoryContext = await retrieveMemoryContext(sessionId, answer);

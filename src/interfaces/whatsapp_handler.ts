@@ -11,7 +11,7 @@ const { Client, LocalAuth, MessageMedia } = WAWebJS;
 const RATE_LIMIT_MS = 1500;
 
 export class WhatsAppHandler {
-    readonly #client: Client;
+    readonly #client: WAWebJS.Client;
     readonly #allowedPhoneNumber: string;
     #lastMessageAt: number = 0;
 

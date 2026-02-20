@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
-import type Database from 'better-sqlite3';
+import type BetterSqlite3 from 'better-sqlite3';
 import * as dbModule from './db.js';
 import type {
   SecretDiagnostics,
@@ -55,7 +55,7 @@ export interface SecretVaultServiceOptions {
   masterKey?: string;
   requiredSecrets?: string[];
   now?: () => Date;
-  database?: Database | null;
+  database?: BetterSqlite3.Database | null;
 }
 
 function normalizeSecretName(name: string): string {
@@ -128,8 +128,8 @@ function splitRequiredSecrets(value: string | undefined): string[] {
     .map((item) => normalizeSecretName(item));
 }
 
-function resolveDatabaseFromModule(): Database | null {
-  const maybeDb = (dbModule as { db?: Database }).db;
+function resolveDatabaseFromModule(): BetterSqlite3.Database | null {
+  const maybeDb = (dbModule as { db?: BetterSqlite3.Database }).db;
   if (!maybeDb || typeof maybeDb.prepare !== 'function') {
     return null;
   }
@@ -141,7 +141,7 @@ export class SecretVaultService {
   private readonly requiredSecrets: Set<string>;
   private readonly runtimeSecretValues: Map<string, string> = new Map();
   private readonly explicitMasterKey?: string;
-  private readonly db: Database | null;
+  private readonly db: BetterSqlite3.Database | null;
   private cachedMasterKey: Buffer | null = null;
   private tablesReady = false;
 
@@ -699,7 +699,7 @@ export class SecretVaultService {
     this.tablesReady = true;
   }
 
-  private requireDatabase(): Database {
+  private requireDatabase(): BetterSqlite3.Database {
     if (!this.db) {
       throw new Error('Secret vault storage is unavailable in this runtime.');
     }
@@ -805,7 +805,7 @@ export class SecretVaultService {
     }
   }
 
-  private getMetadataByNameInternal(name: string, db: Database): SecretMetadata | null {
+  private getMetadataByNameInternal(name: string, db: BetterSqlite3.Database): SecretMetadata | null {
     const row = db
       .prepare(
         `SELECT
@@ -904,7 +904,7 @@ export class SecretVaultService {
   }
 
   private insertAuditEvent(
-    db: Database,
+    db: BetterSqlite3.Database,
     secretName: string,
     action: string,
     status: 'success' | 'failure',
