@@ -1,0 +1,8 @@
+{
+  "track_id": "mvp_gate_wizard_alignment_20260221",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-02-21T08:35:00Z",
+  "updated_at": "2026-02-21T08:35:00Z",
+  "description": "Align MVP release checklist and gate criteria with wizard-first setup and JSON config validation artifacts."
+}

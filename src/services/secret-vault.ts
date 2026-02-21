@@ -12,6 +12,7 @@ import type {
   SecretSetInput,
   SecretSource,
 } from '../types/secret-vault.js';
+import { getConfigValue, loadTwinClawJson } from '../config/config-loader.js';
 
 const DEFAULT_ROTATION_WINDOW_HOURS = 24 * 30;
 const DEFAULT_WARNING_WINDOW_HOURS = 24 * 3;
@@ -149,7 +150,7 @@ export class SecretVaultService {
     this.now = options.now ?? (() => new Date());
     this.explicitMasterKey = options.masterKey;
     this.db = options.database === undefined ? resolveDatabaseFromModule() : options.database;
-    const configuredRequired = splitRequiredSecrets(process.env.SECRET_VAULT_REQUIRED);
+    const configuredRequired = splitRequiredSecrets(getConfigValue('SECRET_VAULT_REQUIRED'));
     const combinedRequired = [
       ...(options.requiredSecrets ?? []),
       ...configuredRequired,
@@ -521,7 +522,7 @@ export class SecretVaultService {
       return vaultValue;
     }
 
-    const envValue = process.env[normalized];
+    const envValue = getConfigValue(normalized, true);
     if (typeof envValue === 'string' && envValue.length > 0) {
       return envValue;
     }
@@ -713,8 +714,8 @@ export class SecretVaultService {
 
     const source =
       this.explicitMasterKey ??
-      process.env.SECRET_VAULT_MASTER_KEY ??
-      process.env.API_SECRET;
+      getConfigValue('SECRET_VAULT_MASTER_KEY', true) ??
+      getConfigValue('API_SECRET', true);
     if (!source) {
       throw new Error(
         'Missing SECRET_VAULT_MASTER_KEY (or API_SECRET fallback) for secret encryption.',
@@ -870,6 +871,19 @@ export class SecretVaultService {
     const values = new Set<string>();
 
     for (const value of this.runtimeSecretValues.values()) {
+      if (value.length >= MIN_REDACTION_VALUE_LENGTH) {
+        values.add(value);
+      }
+    }
+
+    const twinClawConfig = loadTwinClawJson();
+    for (const [name, value] of Object.entries(twinClawConfig)) {
+      if (!value) {
+        continue;
+      }
+      if (!SENSITIVE_ENV_NAME_PATTERN.test(name)) {
+        continue;
+      }
       if (value.length >= MIN_REDACTION_VALUE_LENGTH) {
         values.add(value);
       }

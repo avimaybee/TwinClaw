@@ -34,6 +34,7 @@ import {
   type LocalStateSnapshotRecordRow,
 } from './db.js';
 import { logThought, scrubSensitiveText } from '../utils/logger.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 const BACKUP_JOB_ID = 'local-state-snapshot';
 const MANIFEST_VERSION = 1;
@@ -155,7 +156,7 @@ export class LocalStateBackupService {
     this.#operationsDir = path.join(this.#backupRootDir, 'operations');
     this.#retentionLimit = Math.max(1, options.retentionLimit ?? DEFAULT_RETENTION_LIMIT);
     this.#snapshotCronExpression =
-      options.snapshotCronExpression ?? process.env.LOCAL_STATE_SNAPSHOT_CRON ?? DEFAULT_SNAPSHOT_CRON;
+      options.snapshotCronExpression ?? getConfigValue('LOCAL_STATE_SNAPSHOT_CRON') ?? DEFAULT_SNAPSHOT_CRON;
     this.#scheduler = options.scheduler;
     this.#now = options.now ?? (() => new Date());
     this.#beforeRestoreApplyForTest = options.beforeRestoreApplyForTest;

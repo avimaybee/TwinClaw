@@ -6,6 +6,37 @@ import type { SttService } from '../services/stt-service.js';
 import type { TtsService } from '../services/tts-service.js';
 import { logThought } from '../utils/logger.js';
 import type { QueueService } from '../services/queue-service.js';
+import {
+  getDmPairingService,
+  normalizePairingSenderId,
+  type DmPairingService,
+  type DmPolicy,
+  type PairingChannel,
+} from '../services/dm-pairing.js';
+import type { Platform } from '../types/messaging.js';
+
+interface ChannelAccessConfig {
+  dmPolicy: DmPolicy;
+  allowFrom: string[];
+}
+
+export interface DispatcherOptions {
+  pairingService?: DmPairingService;
+  telegram?: Partial<ChannelAccessConfig>;
+  whatsapp?: Partial<ChannelAccessConfig>;
+}
+
+const DEFAULT_ACCESS_CONFIG: ChannelAccessConfig = {
+  dmPolicy: 'pairing',
+  allowFrom: [],
+};
+
+function buildPairingChallenge(channel: PairingChannel, code: string): string {
+  return (
+    `[TwinClaw] Pairing required before I can process your messages on ${channel}.\n` +
+    `Run: twinclaw pairing approve ${channel} ${code}`
+  );
+}
 
 /**
  * Unified Interface Dispatcher
@@ -28,6 +59,8 @@ export class Dispatcher {
   readonly #tts: TtsService;
   readonly #gateway: GatewayHandler;
   readonly #queue: QueueService;
+  readonly #pairingService: DmPairingService;
+  readonly #accessConfig: Record<Platform, ChannelAccessConfig>;
 
   constructor(
     telegram: TelegramHandler | undefined,
@@ -36,6 +69,7 @@ export class Dispatcher {
     tts: TtsService,
     gateway: GatewayHandler,
     queue: QueueService,
+    options: DispatcherOptions = {},
   ) {
     this.#telegram = telegram;
     this.#whatsapp = whatsapp;
@@ -43,6 +77,11 @@ export class Dispatcher {
     this.#tts = tts;
     this.#gateway = gateway;
     this.#queue = queue;
+    this.#pairingService = options.pairingService ?? getDmPairingService();
+    this.#accessConfig = {
+      telegram: this.#resolveAccessConfig('telegram', options.telegram),
+      whatsapp: this.#resolveAccessConfig('whatsapp', options.whatsapp),
+    };
 
     // Wire inbound message callbacks.
     if (this.#telegram) this.#telegram.onMessage = (msg) => this.#handle(msg);
@@ -58,6 +97,14 @@ export class Dispatcher {
 
   async #handle(message: InboundMessage): Promise<void> {
     try {
+      const access = this.#authorizeSender(message);
+      if (!access.allowed) {
+        if (access.challengeText) {
+          this.#queue.enqueue(message.platform, message.chatId, access.challengeText);
+        }
+        return;
+      }
+
       const normalized = await this.#resolveAudio(message);
       const responseText = await this.#gateway.processMessage(normalized);
       await this.#dispatch(normalized, responseText);
@@ -67,6 +114,47 @@ export class Dispatcher {
         `[Dispatcher] Unhandled error: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  #resolveAccessConfig(
+    channel: PairingChannel,
+    config: Partial<ChannelAccessConfig> | undefined,
+  ): ChannelAccessConfig {
+    const dmPolicy: DmPolicy = config?.dmPolicy === 'allowlist' ? 'allowlist' : 'pairing';
+    const allowFrom = [...new Set((config?.allowFrom ?? DEFAULT_ACCESS_CONFIG.allowFrom)
+      .map((senderId) => normalizePairingSenderId(channel, senderId))
+      .filter((senderId) => senderId.length > 0))];
+
+    this.#pairingService.seedAllowFrom(channel, allowFrom);
+    return { dmPolicy, allowFrom };
+  }
+
+  #authorizeSender(message: InboundMessage): { allowed: boolean; challengeText?: string } {
+    const channel = message.platform as PairingChannel;
+    const normalizedSenderId = normalizePairingSenderId(channel, message.senderId);
+    if (!normalizedSenderId) {
+      return { allowed: false };
+    }
+
+    const config = this.#accessConfig[message.platform];
+    const allowlist = new Set(config.allowFrom);
+    if (allowlist.has(normalizedSenderId) || this.#pairingService.isApproved(channel, normalizedSenderId)) {
+      return { allowed: true };
+    }
+
+    if (config.dmPolicy !== 'pairing') {
+      return { allowed: false };
+    }
+
+    const request = this.#pairingService.requestPairing(channel, normalizedSenderId);
+    if (request.status === 'created' && request.request) {
+      return {
+        allowed: false,
+        challengeText: buildPairingChallenge(channel, request.request.code),
+      };
+    }
+
+    return { allowed: false };
   }
 
   /**

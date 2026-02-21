@@ -138,13 +138,12 @@ export const CONFIG_SCHEMA: readonly ConfigKeySpec[] = [
   {
     key: 'TELEGRAM_USER_ID',
     type: 'env',
-    class: 'conditional',
-    condition: 'messaging:telegram',
+    class: 'optional',
     scope: 'messaging',
     description:
-      'Your personal Telegram user ID (integer). Restricts bot interactions to this user only.',
+      'Optional Telegram user ID allowlist seed (integer) for pre-authorizing yourself before pairing approvals.',
     remediation:
-      'Set TELEGRAM_USER_ID to your numeric Telegram user ID. Find it by messaging @userinfobot on Telegram.',
+      'Optional: set TELEGRAM_USER_ID to your numeric Telegram user ID. Find it by messaging @userinfobot on Telegram.',
   },
 
   // ── Messaging: WhatsApp ──────────────────────────────────────────────────────

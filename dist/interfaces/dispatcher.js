@@ -1,5 +1,14 @@
 import fs from 'node:fs';
 import { logThought } from '../utils/logger.js';
+import { getDmPairingService, normalizePairingSenderId, } from '../services/dm-pairing.js';
+const DEFAULT_ACCESS_CONFIG = {
+    dmPolicy: 'pairing',
+    allowFrom: [],
+};
+function buildPairingChallenge(channel, code) {
+    return (`[TwinClaw] Pairing required before I can process your messages on ${channel}.\n` +
+        `Run: twinclaw pairing approve ${channel} ${code}`);
+}
 /**
  * Unified Interface Dispatcher
  *
@@ -21,13 +30,20 @@ export class Dispatcher {
     #tts;
     #gateway;
     #queue;
-    constructor(telegram, whatsapp, stt, tts, gateway, queue) {
+    #pairingService;
+    #accessConfig;
+    constructor(telegram, whatsapp, stt, tts, gateway, queue, options = {}) {
         this.#telegram = telegram;
         this.#whatsapp = whatsapp;
         this.#stt = stt;
         this.#tts = tts;
         this.#gateway = gateway;
         this.#queue = queue;
+        this.#pairingService = options.pairingService ?? getDmPairingService();
+        this.#accessConfig = {
+            telegram: this.#resolveAccessConfig('telegram', options.telegram),
+            whatsapp: this.#resolveAccessConfig('whatsapp', options.whatsapp),
+        };
         // Wire inbound message callbacks.
         if (this.#telegram)
             this.#telegram.onMessage = (msg) => this.#handle(msg);
@@ -41,6 +57,13 @@ export class Dispatcher {
     // ── Core Dispatch Loop ────────────────────────────────────────────────────────
     async #handle(message) {
         try {
+            const access = this.#authorizeSender(message);
+            if (!access.allowed) {
+                if (access.challengeText) {
+                    this.#queue.enqueue(message.platform, message.chatId, access.challengeText);
+                }
+                return;
+            }
             const normalized = await this.#resolveAudio(message);
             const responseText = await this.#gateway.processMessage(normalized);
             await this.#dispatch(normalized, responseText);
@@ -49,6 +72,37 @@ export class Dispatcher {
             console.error('[Dispatcher] Unhandled error processing message:', err);
             await logThought(`[Dispatcher] Unhandled error: ${err instanceof Error ? err.message : String(err)}`);
         }
+    }
+    #resolveAccessConfig(channel, config) {
+        const dmPolicy = config?.dmPolicy === 'allowlist' ? 'allowlist' : 'pairing';
+        const allowFrom = [...new Set((config?.allowFrom ?? DEFAULT_ACCESS_CONFIG.allowFrom)
+                .map((senderId) => normalizePairingSenderId(channel, senderId))
+                .filter((senderId) => senderId.length > 0))];
+        this.#pairingService.seedAllowFrom(channel, allowFrom);
+        return { dmPolicy, allowFrom };
+    }
+    #authorizeSender(message) {
+        const channel = message.platform;
+        const normalizedSenderId = normalizePairingSenderId(channel, message.senderId);
+        if (!normalizedSenderId) {
+            return { allowed: false };
+        }
+        const config = this.#accessConfig[message.platform];
+        const allowlist = new Set(config.allowFrom);
+        if (allowlist.has(normalizedSenderId) || this.#pairingService.isApproved(channel, normalizedSenderId)) {
+            return { allowed: true };
+        }
+        if (config.dmPolicy !== 'pairing') {
+            return { allowed: false };
+        }
+        const request = this.#pairingService.requestPairing(channel, normalizedSenderId);
+        if (request.status === 'created' && request.request) {
+            return {
+                allowed: false,
+                challengeText: buildPairingChallenge(channel, request.request.code),
+            };
+        }
+        return { allowed: false };
     }
     /**
      * If the message contains an audio file, transcribe it and substitute the

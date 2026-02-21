@@ -29,10 +29,14 @@ import { PolicyEngine } from './services/policy-engine.js';
 import { savePolicyAuditLog } from './services/db.js';
 import { getSecretVaultService } from './services/secret-vault.js';
 import { handleSecretVaultCli } from './core/secret-vault-cli.js';
+import { handlePairingCli } from './core/pairing-cli.js';
+import { handleChannelsCli } from './core/channels-cli.js';
+import { getDmPairingService } from './services/dm-pairing.js';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 const secretVault = getSecretVaultService();
+const pairingService = getDmPairingService();
 
 // ── Early one-shot CLI commands (bypass service startup) ─────────────────────
 
@@ -48,26 +52,50 @@ if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
     process.exit(process.exitCode ?? 0);
 }
 
+if (handlePairingCli(process.argv.slice(2), pairingService)) {
+    process.exit(process.exitCode ?? 0);
+}
+
+const channelsCliHandled = await handleChannelsCli(process.argv.slice(2));
+if (channelsCliHandled) {
+    if (process.exitCode !== undefined) {
+        process.exit(process.exitCode);
+    }
+    // Hang the main thread so async tasks (like WhatsApp login) can complete
+    await new Promise(() => { });
+}
+
 if (handleUnknownCommand(process.argv.slice(2))) {
     process.exit(process.exitCode ?? 1);
 }
 
-// setup bypasses secret preflight so first-run configuration works
+// Check for setup mode or missing critical configuration
 const isSetupMode = process.argv[2] === 'setup';
+const onboardFlag = process.argv.includes('--onboard');
+
+if (onboardFlag) {
+    await runOnboarding();
+    process.exit(0);
+}
+
+// ── Auto-Setup Trigger (If critical config missing) ──────────────────────────
+
+async function tryAutoSetup() {
+    try {
+        secretVault.assertStartupPreflight(['API_SECRET']);
+    } catch (error) {
+        console.log("\n[TwinClaw] Welcome! Critical configuration missing.");
+        console.log("Starting the interactive setup wizard to configure your agent.\n");
+        await runSetupWizard();
+        console.log("\n[TwinClaw] Setup complete. Initializing Gateway...\n");
+    }
+}
 
 if (!isSetupMode) {
-    try {
-        const preflight = secretVault.assertStartupPreflight(['API_SECRET']);
-        if (preflight.warnings.length > 0) {
-            const warningSummary = preflight.warnings.join(' | ');
-            console.warn(`[TwinClaw] Secret preflight warnings: ${warningSummary}`);
-            void logThought(`[SecretVault] ${warningSummary}`);
-        }
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[TwinClaw] Startup blocked by secret preflight: ${message}`);
-        process.exit(1);
-    }
+    await tryAutoSetup();
+} else {
+    await runSetupWizard();
+    process.exit(0);
 }
 
 console.log("TwinClaw Gateway Initialized.");
@@ -145,30 +173,37 @@ const runtimeBudgetGovernor = new RuntimeBudgetGovernor();
 const modelRouter = new ModelRouter({ budgetGovernor: runtimeBudgetGovernor });
 const gateway = new Gateway(skillRegistry, { policyEngine, router: modelRouter });
 const telegramBotToken = secretVault.readSecret('TELEGRAM_BOT_TOKEN');
-const telegramUserId = process.env.TELEGRAM_USER_ID;
+const telegramUserId = process.env.TELEGRAM_USER_ID?.trim();
 const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? process.env.WHATSAPP_PHONE_NUMBER;
 const groqApiKey = secretVault.readSecret('GROQ_API_KEY');
 
 let dispatcher: Dispatcher | null = null;
 
 if (
-    (telegramBotToken && telegramUserId) || whatsappPhoneNumber
+    telegramBotToken || whatsappPhoneNumber
 ) {
     if (groqApiKey) {
         let telegramHandler: TelegramHandler | undefined;
         let whatsappHandler: WhatsAppHandler | undefined;
+        const telegramAllowFrom: string[] = [];
+        const whatsappAllowFrom: string[] = [];
 
-        if (telegramBotToken && telegramUserId) {
-            const parsedTelegramUserId = Number(telegramUserId);
-            if (!Number.isInteger(parsedTelegramUserId)) {
-                console.error('[TwinClaw] TELEGRAM_USER_ID must be a valid integer.');
-            } else {
-                telegramHandler = new TelegramHandler(telegramBotToken, parsedTelegramUserId);
+        if (telegramBotToken) {
+            telegramHandler = new TelegramHandler(telegramBotToken);
+
+            if (telegramUserId) {
+                const parsedTelegramUserId = Number(telegramUserId);
+                if (!Number.isInteger(parsedTelegramUserId) || parsedTelegramUserId <= 0) {
+                    console.error('[TwinClaw] TELEGRAM_USER_ID must be a positive integer when provided.');
+                } else {
+                    telegramAllowFrom.push(String(parsedTelegramUserId));
+                }
             }
         }
 
         if (whatsappPhoneNumber) {
-            whatsappHandler = new WhatsAppHandler(whatsappPhoneNumber);
+            whatsappHandler = new WhatsAppHandler();
+            whatsappAllowFrom.push(whatsappPhoneNumber);
         }
 
         const sttService = new SttService(groqApiKey);
@@ -194,7 +229,17 @@ if (
         );
         queueService.start();
 
-        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway, queueService);
+        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway, queueService, {
+            pairingService,
+            telegram: {
+                dmPolicy: 'pairing',
+                allowFrom: telegramAllowFrom,
+            },
+            whatsapp: {
+                dmPolicy: 'pairing',
+                allowFrom: whatsappAllowFrom,
+            },
+        });
         void logThought('[TwinClaw] Messaging dispatcher and persistent queue initialized.');
     } else {
         console.warn('[TwinClaw] Dispatcher requires GROQ_API_KEY.');

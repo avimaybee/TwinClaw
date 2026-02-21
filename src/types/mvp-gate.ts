@@ -10,7 +10,7 @@ export type MvpHardGateId =
   | 'api-health'
   | 'interface-readiness'
   | 'npm-commands'
-  | 'env-config';
+  | 'cli-onboard';
 
 export type MvpAdvisoryId = 'dist-artifact' | 'test-coverage' | 'doctor-readiness';
 

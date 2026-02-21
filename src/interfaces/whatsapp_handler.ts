@@ -12,13 +12,9 @@ const RATE_LIMIT_MS = 1500;
 
 export class WhatsAppHandler {
     readonly #client: WAWebJS.Client;
-    readonly #allowedPhoneNumber: string;
     #lastMessageAt: number = 0;
 
-    constructor(allowedPhoneNumber: string) {
-        // Strip out common formatting characters just to be safe
-        this.#allowedPhoneNumber = allowedPhoneNumber.replace(/[\s\+\-\(\)]/g, '');
-
+    constructor() {
         this.#client = new Client({
             authStrategy: new LocalAuth({ dataPath: './memory/whatsapp_auth' }),
             puppeteer: {
@@ -30,12 +26,6 @@ export class WhatsAppHandler {
     }
 
     onMessage?: (message: InboundMessage) => Promise<void>;
-
-    #isAuthorized(remoteId: string): boolean {
-        // WhatsApp IDs usually look like '1234567890@c.us'
-        const number = remoteId.split('@')[0];
-        return number === this.#allowedPhoneNumber;
-    }
 
     async #applyRateLimit(): Promise<void> {
         const elapsed = Date.now() - this.#lastMessageAt;
@@ -58,10 +48,6 @@ export class WhatsAppHandler {
         });
 
         this.#client.on('message', async (msg) => {
-            if (!this.#isAuthorized(msg.from)) {
-                return;
-            }
-
             await this.#applyRateLimit();
 
             const base: Omit<InboundMessage, 'audioFilePath'> = {

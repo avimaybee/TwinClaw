@@ -1,0 +1,8 @@
+{
+  "track_id": "docs_prd_blueprint_migration_20260221",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-02-21T08:35:00Z",
+  "updated_at": "2026-02-21T08:35:00Z",
+  "description": "Update PRD and TwinClaw blueprint docs to formalize JSON config onboarding and DM pairing architecture."
+}

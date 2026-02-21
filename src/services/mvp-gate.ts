@@ -52,10 +52,10 @@ const TRIAGE_OWNERSHIP: Record<
     ownerTrack: 'Track 38: NPM Command Reliability Matrix & Script Repair',
     nextAction: 'Add the missing npm script(s) to package.json and verify each runs successfully.',
   },
-  'env-config': {
+  'cli-onboard': {
     severity: 'blocker',
-    ownerTrack: 'Track 40: Configuration & Environment Validation Framework',
-    nextAction: 'Create or restore `.env.example` with documentation for all required environment variables.',
+    ownerTrack: 'Track 23: CLI Hardening, User Onboarding & Doctor Diagnostics',
+    nextAction: 'Ensure `src/core/onboarding.ts` exists and implements the CLI wizard logic.',
   },
   'dist-artifact': {
     severity: 'advisory',
@@ -105,9 +105,9 @@ const SMOKE_SCENARIOS: SmokeScenarioDef[] = [
     relativePaths: ['mcp-servers.json'],
   },
   {
-    id: 'core:env-template',
-    label: 'Environment variable template (.env.example) exists',
-    relativePaths: ['.env.example'],
+    id: 'core:config-template',
+    label: 'Configuration template (twinclaw.default.json) exists',
+    relativePaths: ['twinclaw.default.json'],
   },
   {
     id: 'runtime:interface-dispatcher',
@@ -208,7 +208,7 @@ export class MvpGateService {
     checks.push(await this.#runBuildCheck());
     checks.push(await this.#runTestsCheck());
     checks.push(await this.#runNpmCommandsCheck());
-    checks.push(await this.#runEnvConfigCheck());
+    checks.push(await this.#runCliOnboardCheck());
     checks.push(await this.#runInterfaceReadinessCheck());
 
     // api-health is only a hard gate when a URL is explicitly provided
@@ -314,23 +314,23 @@ export class MvpGateService {
     }
   }
 
-  async #runEnvConfigCheck(): Promise<MvpCheckResult> {
+  async #runCliOnboardCheck(): Promise<MvpCheckResult> {
     const startedAt = nowIso(this.#now);
     const started = Date.now();
-    const envExamplePath = path.join(this.#workspaceRoot, '.env.example');
-    const exists = await pathExists(envExamplePath);
+    const onboardPath = path.join(this.#workspaceRoot, 'src', 'core', 'onboarding.ts');
+    const exists = await pathExists(onboardPath);
 
     return {
-      id: 'env-config',
+      id: 'cli-onboard',
       class: 'hard-gate',
       status: exists ? 'passed' : 'failed',
       detail: exists
-        ? '.env.example template is present.'
-        : '.env.example is missing — environment variable documentation is required for safe deployment.',
+        ? 'CLI onboarding wizard module is present.'
+        : 'src/core/onboarding.ts is missing — the interactive wizard is required for MVP setup.',
       startedAt,
       completedAt: nowIso(this.#now),
       durationMs: Date.now() - started,
-      artifacts: exists ? ['.env.example'] : undefined,
+      artifacts: exists ? ['src/core/onboarding.ts'] : undefined,
     };
   }
 

@@ -1,0 +1,8 @@
+{
+  "track_id": "dm_pairing_policy_20260221",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-02-21T08:35:00Z",
+  "updated_at": "2026-02-21T08:35:00Z",
+  "description": "Implement pairing-first DM access policy and approval commands for Telegram/WhatsApp channels."
+}

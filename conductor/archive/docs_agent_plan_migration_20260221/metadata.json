@@ -1,0 +1,8 @@
+{
+  "track_id": "docs_agent_plan_migration_20260221",
+  "type": "chore",
+  "status": "completed",
+  "created_at": "2026-02-21T08:35:00Z",
+  "updated_at": "2026-02-21T14:10:00Z",
+  "description": "Update agent execution roadmap docs to replace env-centric setup with onboard + pairing configuration flows."
+}

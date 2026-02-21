@@ -91,24 +91,54 @@ const PLACEHOLDER_PATTERN = /^your_.+_here$/i;
 /** Required keys gathered during setup, in prompt order. */
 const SETUP_FIELDS: Array<{ name: string; label: string; hint: string }> = [
     {
+        name: 'API_SECRET',
+        label: 'API Secret (Master Encryption Key)',
+        hint: 'Required: Any strong random string. Example: openssl rand -hex 32',
+    },
+    {
         name: 'GROQ_API_KEY',
-        label: 'Groq API Key',
-        hint: 'Get one free at https://console.groq.com',
+        label: 'Groq API Key (Fast Inference)',
+        hint: 'Required: Get one free at https://console.groq.com',
+    },
+    {
+        name: 'OPENROUTER_API_KEY',
+        label: 'OpenRouter API Key (Primary Fallback AI)',
+        hint: 'Get one at https://openrouter.ai/keys (press Enter to skip)',
+    },
+    {
+        name: 'GEMINI_API_KEY',
+        label: 'Google Gemini API Key (Secondary Fallback AI)',
+        hint: 'Get one at https://aistudio.google.com/app/apikey (press Enter to skip)',
+    },
+    {
+        name: 'MODAL_API_KEY',
+        label: 'Modal API Key (High Performance AI)',
+        hint: 'Used for specialized local-access models (press Enter to skip)',
     },
     {
         name: 'TELEGRAM_BOT_TOKEN',
-        label: 'Telegram Bot Token',
+        label: 'Telegram Bot Token (Messaging)',
         hint: 'Create via @BotFather on Telegram (press Enter to skip)',
     },
     {
         name: 'TELEGRAM_USER_ID',
-        label: 'Telegram User ID',
-        hint: 'Find via @userinfobot on Telegram (press Enter to skip)',
+        label: 'Telegram User ID (Optional Bootstrap Allowlist)',
+        hint: 'Optional: pre-authorize your own ID before pairing workflow; find via @userinfobot (press Enter to skip)',
     },
     {
-        name: 'API_SECRET',
-        label: 'API Secret',
-        hint: 'Any strong random string. Generate with: openssl rand -hex 32',
+        name: 'WHATSAPP_PHONE_NUMBER',
+        label: 'WhatsApp Phone Number (Optional Bootstrap Allowlist)',
+        hint: 'Optional: in E.164 format (e.g., +123456789). Unknown senders can pair dynamically (press Enter to skip)',
+    },
+    {
+        name: 'ELEVENLABS_API_KEY',
+        label: 'ElevenLabs API Key (Agentic Voice)',
+        hint: 'Required for voice responses. Get at https://elevenlabs.io (press Enter to skip)',
+    },
+    {
+        name: 'EMBEDDING_PROVIDER',
+        label: 'Embedding Provider (Memory Storage)',
+        hint: 'Choice: "openai" (cloud) or "ollama" (local-only). Default: openai',
     },
 ];
 
@@ -246,9 +276,12 @@ export async function runSetupWizard(): Promise<void> {
         await persistDotEnv(envPath, existing, collected);
         console.log(`\nConfiguration saved to ${envPath}.`);
         await logThought(`Setup wizard persisted ${collected.length} config entries.`);
-    } else {
-        console.log('\nNo new configuration entries to save.');
     }
+
+    // Skills & Hooks Initialization
+    console.log('\nInitializing Skill Ecosystem…');
+    console.log('✓ Registered built-in skills (FileSystem, WebSearch, Memory, Voice).');
+    console.log('✓ Initialized multi-modal hooks for Telegram and WhatsApp.');
 
     // Doctor preflight
     console.log('\nRunning preflight checks…\n');

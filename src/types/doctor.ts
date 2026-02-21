@@ -1,4 +1,4 @@
-export type DoctorCheckKind = 'binary' | 'env-var' | 'filesystem' | 'service-endpoint';
+export type DoctorCheckKind = 'binary' | 'env-var' | 'filesystem' | 'service-endpoint' | 'channel-auth' | 'config-schema';
 
 export type DoctorSeverity = 'critical' | 'warning' | 'info';
 

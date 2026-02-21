@@ -31,7 +31,7 @@ All of the following **must pass** before a release is declared ready. Any failu
 | 1 | **TypeScript Build** | `build` | `npm run build` exits 0 with zero compiler errors | `dist/` contains compiled output |
 | 2 | **Test Suite** | `tests` | `npm run test` exits 0 with 0 failures | Vitest summary — all tests pass |
 | 3 | **Required NPM Scripts** | `npm-commands` | `build`, `test`, `start`, `release:preflight`, `release:prepare`, `release:rollback` all present in `package.json` | `package.json#scripts` |
-| 4 | **Environment Template** | `env-config` | `.env.example` exists and documents required environment variables | `.env.example` |
+| 4 | **CLI Onboarding** | `cli-onboard` | `src/core/onboarding.ts` exists and implements the interactive wizard | `src/core/onboarding.ts` |
 | 5 | **Interface Readiness** | `interface-readiness` | `gui/package.json`, `src/interfaces/dispatcher.ts`, `mcp-servers.json` all present | File existence check |
 | 6 | **API Health** *(if server running)* | `api-health` | `GET /health` returns HTTP 200 with `{"data":{"status":"ok"}}` | HTTP response |
 
@@ -59,7 +59,7 @@ These deterministic file-existence checks verify core runtime assets are in plac
 |---|---|---|
 | `core:package-manifest` | `package.json` | File exists |
 | `core:mcp-config` | `mcp-servers.json` | File exists |
-| `core:env-template` | `.env.example` | File exists |
+| `core:config-template` | `twinclaw.default.json` | File exists |
 | `runtime:interface-dispatcher` | `src/interfaces/dispatcher.ts` | File exists |
 | `runtime:release-cli` | `src/release/cli.ts` | File exists |
 | `runtime:db-service` | `src/services/db.ts` | File exists |
@@ -78,7 +78,7 @@ When a check fails, the gate report emits a triage entry with the owning track a
 | `api-health` | Track 41: Runtime Health & Doctor | Start runtime; verify `GET /health` |
 | `interface-readiness` | Track 35: Build Contract Recovery | Ensure all critical interface files exist |
 | `npm-commands` | Track 38: NPM Command Reliability | Add missing scripts to `package.json` |
-| `env-config` | Track 40: Config & Env Validation | Create/restore `.env.example` |
+| `cli-onboard` | Track 23: CLI Hardening & Doctor | Ensure `src/core/onboarding.ts` exists |
 | `dist-artifact` | Track 35: Build Contract Recovery | Run `npm run build` to populate `dist/` |
 | `test-coverage` | Track 43: Coverage Gap Closure | Run `npm run test:coverage` and close gaps |
 | `doctor-readiness` | Track 23: CLI Hardening & Doctor | Wire `src/core/onboarding.ts` entrypoint |
@@ -126,6 +126,11 @@ Non-blocking items that should be resolved in the first patch cycle after MVP:
 | Add `api-health` to the default hard-gate (no `--health-url` flag required) | Track 41 | Medium |
 | Wire `--doctor` flag to onboarding CLI for self-diagnosis | Track 23 | Medium |
 | Integrate `npm run mvp:gate` into CI workflow | Track 38/44 | Medium |
+| **Epic: Windows Daemon & Onboarding Wizard** | Track 50 (E1) | High |
+| **Epic: Windows System Tray Companion App** | Track 51 (E2) | High |
+| **Epic: Extended Channels (Teams/Discord/Slack)** | Track 52 (E3) | Medium |
+| **Epic: Tailscale Secure Remote Access** | Track 53 (E4) | Medium |
+| **Epic: Live Canvas / A2UI Rendering** | Track 54 (E3) | Medium |
 
 ---
 

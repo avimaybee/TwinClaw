@@ -1,8 +1,0 @@
-{
-  "track_id": "control_plane_websocket_streaming_20260220",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-02-20T17:05:00Z",
-  "updated_at": "2026-02-20T17:05:00Z",
-  "description": "Add authenticated WebSocket control-plane channel for live runtime streaming so operators can observe TwinClaw state changes without polling-heavy loops."
-}

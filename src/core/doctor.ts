@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { getConfigPath } from '../config/json-config.js';
 import type {
   DoctorCheck,
   DoctorCheckResult,
@@ -48,10 +49,10 @@ export const ENV_VAR_CHECKS: DoctorCheck[] = [
   {
     kind: 'env-var',
     name: 'TELEGRAM_USER_ID',
-    description: 'Your Telegram user ID for bot authorization',
-    severity: 'warning',
+    description: 'Optional Telegram user ID bootstrap allowlist seed',
+    severity: 'info',
     remediation:
-      'Find your Telegram user ID via @userinfobot and set TELEGRAM_USER_ID in your .env file.',
+      'Optional: set TELEGRAM_USER_ID to pre-authorize your own Telegram account before pairing approvals.',
   },
   {
     kind: 'env-var',
@@ -60,6 +61,27 @@ export const ENV_VAR_CHECKS: DoctorCheck[] = [
     severity: 'critical',
     remediation:
       'Generate a strong secret and set API_SECRET in your .env file. Example: openssl rand -hex 32',
+  },
+  {
+    kind: 'env-var',
+    name: 'OPENROUTER_API_KEY',
+    description: 'Primary AI model provider routing',
+    severity: 'warning',
+    remediation: 'Get an OpenRouter key at https://openrouter.ai/keys and set OPENROUTER_API_KEY in .env.',
+  },
+  {
+    kind: 'env-var',
+    name: 'ELEVENLABS_API_KEY',
+    description: 'Text-to-Speech voice synthesis',
+    severity: 'warning',
+    remediation: 'Get an ElevenLabs key at https://elevenlabs.io and set ELEVENLABS_API_KEY in .env.',
+  },
+  {
+    kind: 'env-var',
+    name: 'GEMINI_API_KEY',
+    description: 'Fallback AI model provider',
+    severity: 'info',
+    remediation: 'Get a Gemini API key at https://aistudio.google.com and set GEMINI_API_KEY in .env.',
   },
 ];
 
@@ -81,11 +103,33 @@ export const FILESYSTEM_CHECKS: DoctorCheck[] = [
   },
 ];
 
+export const CONFIG_CHECKS: DoctorCheck[] = [
+  {
+    kind: 'config-schema',
+    name: 'twinclaw.json',
+    description: 'TwinClaw local JSON configuration schema',
+    severity: 'critical',
+    remediation: 'Run `node src/index.ts setup` to initialize or repair your configuration.',
+  }
+];
+
+export const CHANNEL_CHECKS: DoctorCheck[] = [
+  {
+    kind: 'channel-auth',
+    name: 'whatsapp',
+    description: 'WhatsApp QR session linking state',
+    severity: 'warning',
+    remediation: 'Run `node src/index.ts channels login whatsapp` to link your device.',
+  }
+];
+
 /** All built-in checks in default run order. */
 export const DEFAULT_CHECKS: DoctorCheck[] = [
   ...BINARY_CHECKS,
   ...ENV_VAR_CHECKS,
   ...FILESYSTEM_CHECKS,
+  ...CONFIG_CHECKS,
+  ...CHANNEL_CHECKS,
 ];
 
 // ── Individual check executors ───────────────────────────────────────────────
@@ -191,6 +235,62 @@ export function checkFilesystem(check: DoctorCheck): DoctorCheckResult {
   };
 }
 
+// ── Individual check executors ───────────────────────────────────────────────
+
+/** @internal exported for testing */
+export function checkConfigSchema(check: DoctorCheck): DoctorCheckResult {
+  const configPath = getConfigPath();
+  if (!existsSync(configPath)) {
+    return {
+      check,
+      passed: false,
+      message: `Config file not found at ${configPath}.`,
+    };
+  }
+
+  try {
+    const raw = readFileSync(configPath, 'utf8');
+    JSON.parse(raw);
+    return {
+      check,
+      passed: true,
+      message: 'twinclaw.json config is valid JSON and accessible.',
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      check,
+      passed: false,
+      message: `Config file is invalid JSON: ${msg}`,
+    };
+  }
+}
+
+/** @internal exported for testing */
+export function checkChannelAuth(check: DoctorCheck): DoctorCheckResult {
+  if (check.name === 'whatsapp') {
+    const authDir = path.resolve('memory', 'whatsapp_auth');
+    if (!existsSync(authDir)) {
+      return {
+        check,
+        passed: false,
+        message: 'WhatsApp auth session directory does not exist.',
+      };
+    }
+    // simple heuristic: if it has files, it might be linked
+    return {
+      check,
+      passed: true,
+      message: 'WhatsApp auth session directory exists.',
+    };
+  }
+  return {
+    check,
+    passed: false,
+    message: `Unknown channel: ${check.name}`,
+  };
+}
+
 // ── Report utilities ─────────────────────────────────────────────────────────
 
 function deriveStatus(results: DoctorCheckResult[]): DoctorStatus {
@@ -219,6 +319,10 @@ export function runDoctorChecks(checks?: DoctorCheck[]): DoctorReport {
         return checkEnvVar(check);
       case 'filesystem':
         return checkFilesystem(check);
+      case 'config-schema':
+        return checkConfigSchema(check);
+      case 'channel-auth':
+        return checkChannelAuth(check);
       case 'service-endpoint':
         // Service endpoint checks are intentionally deferred for interactive local use
         return {

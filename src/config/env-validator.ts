@@ -13,6 +13,7 @@
 import { CONFIG_SCHEMA } from './env-schema.js';
 import type { ConfigKeySpec } from './env-schema.js';
 import { getSecretVaultService } from '../services/secret-vault.js';
+import { getConfigValue } from './config-loader.js';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ function hasValue(spec: ConfigKeySpec): boolean {
   if (spec.type === 'secret') {
     return getSecretVaultService().readSecret(spec.key) !== null;
   }
-  const raw = process.env[spec.key];
+  const raw = getConfigValue(spec.key);
   return typeof raw === 'string' && raw.trim().length > 0;
 }
 
@@ -67,7 +68,7 @@ function formatError(spec: ConfigKeySpec): string | null {
     return null;
   }
 
-  const raw = process.env[spec.key];
+  const raw = getConfigValue(spec.key);
   if (!raw) {
     return null; // missing handled separately
   }

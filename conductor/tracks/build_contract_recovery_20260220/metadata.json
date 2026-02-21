@@ -1,8 +1,0 @@
-{
-  "track_id": "build_contract_recovery_20260220",
-  "type": "bug",
-  "status": "new",
-  "created_at": "2026-02-20T17:17:40Z",
-  "updated_at": "2026-02-20T17:17:40Z",
-  "description": "Restore TypeScript build by fixing onboarding context contract drift and secret-vault database typing errors."
-}

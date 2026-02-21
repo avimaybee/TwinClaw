@@ -13,8 +13,9 @@ The implementation is divided into four distinct **Execution Streams**. Agents c
 
 *   **Phase A1: Environment Initialization (Agent 1)**
     *   [ ] Initialize Node.js environment (`npm init -y`) with TypeScript configured for ES2022 (top-level await).
-    *   [ ] Configure `dotenv` and `dotenv-vault` for secure API key injection.
-    *   [ ] Write `Dockerfile` and `docker-compose.yml`, explicitly mapping a local `./memory` volume to `/app/src/memory` for persistent state.
+    *   [ ] Implement the `twinclaw onboard` interactive CLI wizard to securely collect API keys and workspace settings.
+    *   [ ] Build the `twinclaw.json` configuration manager to persist settings in `~/.twinclaw/` (replacing `.env`).
+    *   [ ] Write `Dockerfile` and `docker-compose.yml`, explicitly mapping a local `./memory` volume to `/app/src/memory` for persistent state and config.
 *   **Phase A2: LLM Routing & Native Tool Calling (Agent 1)**
     *   [ ] Install and configure LiteLLM Proxy or build an internal routing abstraction.
     *   [ ] Implement the routing array: Primary (`zai-org/GLM-5-FP8` via Modal), Fallback (`step-3.5-flash` via OpenRouter), Deep Context (`gemini-flash-lite-latest`).
@@ -31,14 +32,16 @@ The implementation is divided into four distinct **Execution Streams**. Agents c
 
 *   **Phase B1: Telegram Integration (Agent 2)**
     *   [ ] Implement `telegram_handler.ts` using `node-telegram-bot-api`.
-    *   [ ] Implement a security whitelist feature mapping incoming messages against the user's secure Telegram ID (`User Info Bot`).
+    *   [ ] Implement the "DM Pairing" protocol: unknown senders receive a pairing code instead of being silently ignored.
+    *   [ ] Build the `twinclaw pairing approve telegram <code>` command to securely whitelist users based on the `dmPolicy: "pairing"` setting.
     *   [ ] Ensure incoming messages are routed reliably to the TwinClaw context window, and responses are queued back to the user.
 *   **Phase B2: Voice Synthesis & Audio Processing (Agent 2)**
     *   [ ] Integrate Whisper (via Groq or OpenAI) to intercept and transcribe incoming Telegram voice notes.
     *   [ ] Integrate ElevenLabs API to allow TwinClaw to stream Text-to-Speech (TTS) voice note replies back to the user on command.
 *   **Phase B3: WhatsApp Interface (Agent 2)**
     *   [ ] Deploy the Evolution API or WAHA docker container.
-    *   [ ] Hook the WhatsApp Webhook listener into the exact same processing pipeline utilized by the Telegram handler.
+    *   [ ] Implement the `twinclaw channels login whatsapp` QR-code flow using the Evolution/WAHA client.
+    *   [ ] Hook the WhatsApp Webhook listener into the exact same processing and pairing pipeline utilized by the Telegram handler.
 
 ---
 
@@ -71,6 +74,24 @@ The implementation is divided into four distinct **Execution Streams**. Agents c
     *   [ ] Document the staging sequence: *Local Code Edit -> Local Docker Run -> Test via Telegram -> Push to Production.*
     *   [ ] Install Railway CLI and write the deployment configuration (`railway.json`).
     *   [ ] Execute the final push to the isolated Railway cloud container to achieve 24/7 uptime without local machine dependency.
+
+---
+
+### Stream Epsilon: Post-MVP Windows Ecosystem & Scaling
+**Focus:** Native Windows integration and secure scaling.
+
+*   **Phase E1: Windows System Integration (Agent 5)**
+    *   [ ] Build the Windows Service daemon installer (`twinclaw onboard --install-daemon`) using `node-windows`.
+    *   [ ] Implement PowerShell capability nodes (`system.run` expansion) and native Windows Toast notifications (`system.notify`).
+*   **Phase E2: Windows System Tray Companion (Agent 6)**
+    *   [ ] Develop the System Tray App using Electron/Tauri with quick-access controls and health indicators.
+    *   [ ] Implement the Voice Wake/PTT GUI overlay and "Talk Mode" visual workspace.
+*   **Phase E3: Extended Channels & Canvas (Agent 7)**
+    *   [ ] Integrate extended messaging modules (Teams, Discord, Slack) into the core Gateway.
+    *   [ ] Deploy the A2UI Canvas rendering engine for interactive agent-driven UI components.
+*   **Phase E4: Tailscale Remote Access (Agent 8)**
+    *   [ ] Implement the `gateway.tailscale.mode` automation script for Serve and Funnel.
+    *   [ ] Write the security audit and password-auth enforcement module for public Funnel access.
 
 ---
 

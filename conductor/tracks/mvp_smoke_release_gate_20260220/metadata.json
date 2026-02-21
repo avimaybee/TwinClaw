@@ -1,8 +1,0 @@
-{
-  "track_id": "mvp_smoke_release_gate_20260220",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-02-20T17:17:40Z",
-  "updated_at": "2026-02-20T17:17:40Z",
-  "description": "Define and execute MVP smoke validation and release gate criteria for build, test, setup, and runtime health."
-}

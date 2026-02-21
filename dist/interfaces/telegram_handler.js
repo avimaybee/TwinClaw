@@ -5,29 +5,23 @@ import path from 'node:path';
 const RATE_LIMIT_MS = 1500;
 /**
  * Wraps the Telegram Bot API to provide:
- *   - Strict sender whitelist enforcement
+ *   - Inbound message normalization for the dispatcher
  *   - Human-like rate limiting between messages
  *   - Normalized InboundMessage delivery including voice-note file paths
  */
 export class TelegramHandler {
     #bot;
-    #allowedUserId;
     #lastMessageAt = 0;
     /**
      * @param token          - Telegram Bot token from @BotFather (TELEGRAM_BOT_TOKEN).
-     * @param allowedUserId  - The single authorized Telegram user ID (TELEGRAM_USER_ID).
      */
-    constructor(token, allowedUserId) {
+    constructor(token) {
         this.#bot = new TelegramBot(token, { polling: true });
-        this.#allowedUserId = allowedUserId;
         this.#registerListeners();
     }
     /** Callback invoked by the dispatcher for every authorized, normalized message. */
     onMessage;
     // ── Private Helpers ──────────────────────────────────────────────────────────
-    #isAuthorized(userId) {
-        return userId === this.#allowedUserId;
-    }
     async #applyRateLimit() {
         const elapsed = Date.now() - this.#lastMessageAt;
         if (elapsed < RATE_LIMIT_MS) {
@@ -37,7 +31,7 @@ export class TelegramHandler {
     }
     #registerListeners() {
         this.#bot.on('message', async (msg) => {
-            if (!msg.from || !this.#isAuthorized(msg.from.id))
+            if (!msg.from)
                 return;
             await this.#applyRateLimit();
             const base = {

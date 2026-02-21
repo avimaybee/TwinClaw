@@ -1,8 +1,11 @@
 {
-  "name": "twinbot",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "twinclaw",
+  "version": "1.1.0",
+  "description": "Eagle-eyed agentic AI gateway with multi-modal hooks and proactive memory.",
+  "main": "dist/index.js",
+  "bin": {
+    "twinclaw": "./src/index.ts"
+  },
   "directories": {
     "doc": "docs"
   },

@@ -8,7 +8,9 @@ Usage: node src/index.ts [command] [options]
 Commands:
   doctor              Run diagnostics and validate prerequisites
   setup               Run the guided configuration wizard
+  pairing             Manage DM pairing approvals (list/approve)
   secret <subcommand> Manage secrets in the secure vault
+  channels <subcmd>   Manage messaging channels (e.g. login)
   --onboard           Run the interactive AI persona-building session
 
 Options:
@@ -19,6 +21,8 @@ Examples:
   node src/index.ts doctor
   node src/index.ts doctor --json
   node src/index.ts setup
+  node src/index.ts pairing list telegram
+  node src/index.ts pairing approve telegram ABCD1234
   node src/index.ts secret list
   node src/index.ts secret set API_SECRET mysecret
   node src/index.ts secret rotate API_SECRET newsecret
@@ -83,9 +87,11 @@ export function handleUnknownCommand(argv: string[]): boolean {
 
   // Flags and known commands pass through
   const KNOWN_COMMANDS = new Set([
+    'pairing',
     'secret',
     'doctor',
     'setup',
+    'channels',
     '--onboard',
     '--help',
     '-h',

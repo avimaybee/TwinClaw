@@ -1,0 +1,37 @@
+{
+    "runtime": {
+        "apiPort": 3100,
+        "secretVaultRequired": []
+    },
+    "models": {
+        "modalApiKey": "",
+        "openRouterApiKey": "",
+        "geminiApiKey": ""
+    },
+    "messaging": {
+        "telegram": {
+            "enabled": false,
+            "botToken": "",
+            "userId": null
+        },
+        "whatsapp": {
+            "enabled": false,
+            "phoneNumber": ""
+        },
+        "voice": {
+            "groqApiKey": ""
+        }
+    },
+    "storage": {
+        "embeddingDim": 1536
+    },
+    "integration": {
+        "embeddingProvider": "openai",
+        "embeddingApiKey": "",
+        "openaiApiKey": "",
+        "embeddingApiUrl": "https://api.openai.com/v1/embeddings",
+        "embeddingModel": "text-embedding-3-small",
+        "ollamaBaseUrl": "http://localhost:11434",
+        "ollamaEmbeddingModel": "mxbai-embed-large"
+    }
+}

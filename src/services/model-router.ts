@@ -18,6 +18,7 @@ import {
 import { getSecretVaultService } from './secret-vault.js';
 import { RuntimeBudgetGovernor } from './runtime-budget-governor.js';
 import type { RuntimeBudgetDirective, RuntimeBudgetProfile, RuntimeBudgetSnapshot } from '../types/runtime-budget.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 interface ModelRouterMetrics {
   totalRequests: number;
@@ -422,7 +423,7 @@ export class ModelRouter {
       return persisted;
     }
 
-    const fromEnv = process.env.MODEL_ROUTING_FALLBACK_MODE;
+    const fromEnv = getConfigValue('MODEL_ROUTING_FALLBACK_MODE');
     const resolved = isFallbackMode(fromEnv) ? fromEnv : DEFAULT_FALLBACK_MODE;
     this.persistFallbackMode(resolved);
     return resolved;

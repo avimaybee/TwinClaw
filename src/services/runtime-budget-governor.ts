@@ -26,6 +26,7 @@ import type {
   RuntimeUsageStage,
 } from '../types/runtime-budget.js';
 import { logThought } from '../utils/logger.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 const MANUAL_PROFILE_KEY = 'manual_profile';
 const DEFAULT_SESSION_ID = 'global';
@@ -76,15 +77,15 @@ export class RuntimeBudgetGovernor {
   constructor(config: RuntimeBudgetGovernorConfig = {}) {
     this.#limits = resolveLimits(config.limits);
     this.#defaultProfile =
-      parseProfile(process.env.RUNTIME_BUDGET_DEFAULT_PROFILE) ??
+      parseProfile(getConfigValue('RUNTIME_BUDGET_DEFAULT_PROFILE')) ??
       config.defaultProfile ??
       'performance';
     this.#preferLocalModel =
       config.preferLocalModel ??
-      parseBoolean(process.env.RUNTIME_BUDGET_PREFER_LOCAL_MODEL) ??
+      parseBoolean(getConfigValue('RUNTIME_BUDGET_PREFER_LOCAL_MODEL')) ??
       false;
     this.#localModelId =
-      process.env.RUNTIME_BUDGET_LOCAL_MODEL_ID?.trim() || config.localModelId || DEFAULT_LOCAL_MODEL_ID;
+      getConfigValue('RUNTIME_BUDGET_LOCAL_MODEL_ID')?.trim() || config.localModelId || DEFAULT_LOCAL_MODEL_ID;
     this.#now = config.now ?? (() => Date.now());
     this.#manualProfile = parseProfile(getRuntimeBudgetState(MANUAL_PROFILE_KEY));
   }
@@ -509,7 +510,7 @@ function resolveLimits(overrides: Partial<RuntimeBudgetLimits> = {}): RuntimeBud
 }
 
 function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = getConfigValue(name);
   if (!raw) {
     return fallback;
   }
@@ -521,7 +522,7 @@ function readIntEnv(name: string, fallback: number): number {
 }
 
 function readFloatEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = getConfigValue(name);
   if (!raw) {
     return fallback;
   }
