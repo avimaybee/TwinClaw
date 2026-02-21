@@ -21,12 +21,12 @@ export interface ShellExecutionOptions {
   allowUnsafe?: boolean;
 }
 
-interface ExecError extends NodeJS.ErrnoException {
+interface ExecError extends Error {
+  code?: number | string;
   stdout?: string;
   stderr?: string;
-  message?: string;
-  code?: number | string;
 }
+
 
 function truncateOutput(output: string): string {
   if (output.length <= MAX_OUTPUT_LENGTH) {
