@@ -1,11 +1,14 @@
 {
   "name": "twinclaw",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Eagle-eyed agentic AI gateway with multi-modal hooks and proactive memory.",
   "main": "dist/index.js",
   "bin": {
-    "twinclaw": "./src/index.ts"
+    "twinclaw": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "directories": {
     "doc": "docs"
   },

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 import { handleOnboardCli, runOnboarding, runSetupWizard, startBasicREPL } from './core/onboarding.js';
