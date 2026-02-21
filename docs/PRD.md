@@ -34,11 +34,11 @@ TwinClaw is a zero-cost, local-first autonomous agentic service inspired by the 
 
 ### 4.3 Identity & State Management
 TwinClaw adopts the established OpenClaw pattern of persisting the agent's identity and state locally using human-readable Markdown files and a centralized JSON configuration, allowing users to deeply customize the agent simply by conversing with it.
-- **`twinclaw.json`**: The **mandatory single source of truth** for all API keys, channel configurations, and default settings. It is initialized via `twinclaw onboard` and located at `~/.twinclaw/workspace/twinclaw.json`, strictly replacing fragile `.env` files and legacy environment variable injection.
+- **`twinclaw.json`**: The **mandatory single source of truth** for all API keys, channel configurations, and default settings. It is initialized via `twinclaw onboard` and located at `%USERPROFILE%\.twinclaw\workspace\twinclaw.json`, strictly replacing fragile `.env` files and legacy environment variable injection.
 - **`soul.md`**: The agent's constitution. Defines its core personality, operational tone, behavioral boundaries, and unbreakable directives. It ensures the AI remains stable across multiple contexts.
 - **`identity.md`**: Defines the agent's specific persona, name, role, and situational awareness to shape its operational behavior.
 - **`memory.md`**: Reserved for curated, persistent long-term facts, preferences, and crucial information that must be remembered persistently across sessions. 
-- **Short-Term Transcripts**: Daily logs (`YYYY-MM-DD.md`) capture immediate context and conversation threads, stored in `~/.twinclaw/workspace/transcripts/`.
+- **Short-Term Transcripts**: Daily logs (`YYYY-MM-DD.md`) capture immediate context and conversation threads, stored in `%USERPROFILE%\.twinclaw\workspace\transcripts\`.
 - **RAG Substrate (SQLite + sqlite-vec)**: Task summaries and memory files are vectorized using free embeddings and saved as `Float32` arrays in the `vec0` virtual table. The system performs KNN SQL `SELECT` queries to inject historical context into active prompts, granting infinite durable recall.
 
 ### 4.4 Multimodal Vision & Browser Integration
@@ -47,14 +47,14 @@ TwinClaw adopts the established OpenClaw pattern of persisting the agent's ident
 - **Zero-Cost Vision (VLM):** For opaque elements (e.g., PDFs, remote desktops, images), the system eschews traditional OCR, instead employing Vision Language Models (like Qwen2.5-VL) on pixel-perfect screenshots to extract text, understand visual layouts, and execute precise coordinates using numeric bounding box labels.
 
 ### 4.5 Proactive File-Centric Behaviors & Cron Jobs
-- **Continuous Observation:** Utilizes `chokidar` to monitor configured workspace directories (e.g., `~/TwinClaw/Inbox`) for new files.
+- **Continuous Observation:** Utilizes `chokidar` to monitor configured workspace directories (e.g., `%USERPROFILE%\TwinClaw\Inbox`) for new files.
 - **Agentic Cron Orchestration:** Scheduled routines and file events enqueue jobs into the local SQLite database via `Sidequest.js`, handling complex background autonomous execution without heavy dependencies like Redis.
 - **Isolated Workers:** Background worker threads independent of the WebSocket event loop process queued jobs completely invisibly.
 
 ### 4.6 Remote Access & Messaging Integrations
 - Implements remote interfaces via **WhatsApp** and **Telegram** to maximize accessibility from mobile devices.
 - **WhatsApp:** Relies on free local-hosting wrappers (Evolution API or WAHA/Baileys) requiring the user to scan a terminal QR code via `twinclaw channels login`, bypassing Meta's official Cloud API costs.
-- **Telegram:** Leverages official bot token WebHooks or Polling natively, offering highly responsive zero-cost cross-platform messaging.
+- **Telegram:** Leverages official bot token WebHooks or Polling natively, offering highly responsive zero-cost messaging.
 - **DM Pairing Security:** To prevent unauthorized access without complex whitelists, the system enforces a pairing policy (`dmPolicy: "pairing"`). When an unknown user messages the agent, it responds with a unique pairing code. The operator must then run `twinclaw pairing approve <channel> <code>` in the host terminal to authorize that specific user ID for all future interactions.
 - Incorporates strict behavioral safety limits (human-like rate-limiting, avoidance of broadcast messages) to mitigate the risk of account bans on standard WhatsApp accounts.
 
@@ -135,8 +135,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_memory USING vec0(
 - `POST /browser/click` : Expected payload `{ "ref": string }`. Maps the numeric reference to the corresponding Playwright locator and dispatches a standard `.click()` event.
 
 ## 6. Execution Privileges & Security Operations
-- **Core Principle:** The agent is deliberately provided access to Node's `child_process.exec` to execute raw bash commands autonomously without strict Human-in-the-Loop blocking prompts.
-- **Protection Measures:** Secrets and API keys are stored exclusively in `twinclaw.json` with restricted filesystem permissions (`chmod 600`). This centralized model completely replaces `.env` or `dotenv-vault` systems, eliminating the risk of accidental environment leakage in logs or subprocesses. Routine Regex scrubbers further sanitize the agent's stdout before persistence to the SQLite `messages` table, protecting API keys even during unrestricted shell execution.
+- **Core Principle:** The agent is deliberately provided access to Node's `child_process.exec` to execute raw Windows shell and PowerShell commands autonomously without strict Human-in-the-Loop blocking prompts.
+- **Protection Measures:** Secrets and API keys are stored exclusively in `twinclaw.json` with restricted Windows filesystem ACLs. This centralized model completely replaces `.env` or `dotenv-vault` systems, eliminating the risk of accidental environment leakage in logs or subprocesses. Routine Regex scrubbers further sanitize the agent's stdout before persistence to the SQLite `messages` table, protecting API keys even during unrestricted shell execution.
 
 ## 7. Implementation Roadmap
 1. **Phase 1: Core Infrastructure & CLI Onboarding** – Implement the `twinclaw onboard` interactive wizard as the primary entry point for environment setup, generating the foundational `twinclaw.json` config and initializing local `soul.md` and `identity.md` personas.

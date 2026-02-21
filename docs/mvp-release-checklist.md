@@ -6,16 +6,22 @@ Use this document as the operator-facing gate for every TwinClaw release candida
 
 ## Quick Start
 
-Run the automated gate locally (no running server required):
+Run the automated gate locally without live API probe:
 
-```bash
+```powershell
 npm run mvp:gate:local
 ```
 
-Run with live API health verification (requires `npm start` to be running):
+Run the full gate (API health hard gate enabled by default):
 
-```bash
+```powershell
 npm run mvp:gate -- --health-url http://127.0.0.1:3100/health
+```
+
+CI mode:
+
+```powershell
+npm run mvp:gate -- --ci
 ```
 
 JSON and Markdown reports are written to `memory/mvp-gate/reports/`.
@@ -31,11 +37,13 @@ All of the following **must pass** before a release is declared ready. Any failu
 | 1 | **TypeScript Build** | `build` | `npm run build` exits 0 with zero compiler errors | `dist/` contains compiled output |
 | 2 | **Test Suite** | `tests` | `npm run test` exits 0 with 0 failures | Vitest summary — all tests pass |
 | 3 | **Required NPM Scripts** | `npm-commands` | `build`, `test`, `start`, `release:preflight`, `release:prepare`, `release:rollback` all present in `package.json` | `package.json#scripts` |
-| 4 | **CLI Onboarding** | `cli-onboard` | `src/core/onboarding.ts` exists and implements the interactive wizard | `src/core/onboarding.ts` |
-| 5 | **Interface Readiness** | `interface-readiness` | `gui/package.json`, `src/interfaces/dispatcher.ts`, `mcp-servers.json` all present | File existence check |
-| 6 | **API Health** *(if server running)* | `api-health` | `GET /health` returns HTTP 200 with `{"data":{"status":"ok"}}` | HTTP response |
+| 4 | **Config Schema** | `config-schema` | `twinclaw.json` passes schema validation | `twinclaw.json` |
+| 5 | **CLI Onboarding Smoke** | `cli-onboard` | Non-interactive onboard run generates schema-valid config | Gate onboarding artifact |
+| 6 | **Vault Health** | `vault-health` | `secret doctor` reports healthy vault status | Secret doctor output |
+| 7 | **Interface Readiness** | `interface-readiness` | `gui/package.json`, `src/interfaces/dispatcher.ts`, `mcp-servers.json` all present | File existence check |
+| 8 | **API Health** | `api-health` | `GET /health` returns HTTP 200 with status `ok` or `degraded` | HTTP response |
 
-> **Note:** `api-health` only activates as a hard gate when `--health-url` is explicitly provided. For local-first runs it is skipped.
+> **Note:** `api-health` is a default hard gate for `mvp:gate`; use `mvp:gate:local` or `--skip-health` to bypass it in local-only runs.
 
 ---
 
@@ -45,9 +53,9 @@ Failures here produce an `advisory-only` verdict — the gate passes but items s
 
 | # | Criterion | Check ID | Advisory Threshold | Owner Track |
 |---|---|---|---|---|
-| 7 | **Build Artifacts Present** | `dist-artifact` | `dist/` exists and is non-empty | Track 35 |
-| 8 | **Test Coverage** | `test-coverage` | lines/functions/branches/statements ≥ 25% | Track 43 |
-| 9 | **Doctor/Onboarding Module** | `doctor-readiness` | `src/core/onboarding.ts` exists | Track 23 |
+| 9 | **Build Artifacts Present** | `dist-artifact` | `dist/` exists and is non-empty | Track 35 |
+| 10 | **Test Coverage** | `test-coverage` | lines/functions/branches/statements ≥ 25% | Track 43 |
+| 11 | **Doctor Module Presence** | `doctor-readiness` | `src/core/doctor.ts` exists | Track 23 |
 
 ---
 
@@ -76,12 +84,14 @@ When a check fails, the gate report emits a triage entry with the owning track a
 | `build` | Track 35: Build Contract Recovery | Fix TypeScript errors; run `npm run build` |
 | `tests` | Track 36: Test Harness FK Integrity | Fix failing specs; run `npm test` |
 | `api-health` | Track 41: Runtime Health & Doctor | Start runtime; verify `GET /health` |
+| `config-schema` | Track 58: MVP Gate v2 Validation | Fix `twinclaw.json` schema violations |
+| `vault-health` | Track 57: Secrets Hygiene & Rotation | Resolve vault health issues via `secret doctor` |
 | `interface-readiness` | Track 35: Build Contract Recovery | Ensure all critical interface files exist |
 | `npm-commands` | Track 38: NPM Command Reliability | Add missing scripts to `package.json` |
-| `cli-onboard` | Track 23: CLI Hardening & Doctor | Ensure `src/core/onboarding.ts` exists |
+| `cli-onboard` | Track 58: MVP Gate v2 Validation | Fix onboarding smoke run and output schema |
 | `dist-artifact` | Track 35: Build Contract Recovery | Run `npm run build` to populate `dist/` |
 | `test-coverage` | Track 43: Coverage Gap Closure | Run `npm run test:coverage` and close gaps |
-| `doctor-readiness` | Track 23: CLI Hardening & Doctor | Wire `src/core/onboarding.ts` entrypoint |
+| `doctor-readiness` | Track 23: CLI Hardening & Doctor | Ensure `src/core/doctor.ts` is present and wired |
 
 ---
 
@@ -112,7 +122,7 @@ One or more hard gates failed. **Do not release.**
 1. Identify the blocking check(s) from the report's `failedHardGates` list.
 2. Route each failure to its owning track using the triage table above.
 3. Once each blocker is resolved, re-run `npm run mvp:gate`.
-4. Only proceed when the gate returns `go` or `advisory-only`.
+4. Only proceed when the gate returns `go`.
 
 ---
 
@@ -123,9 +133,7 @@ Non-blocking items that should be resolved in the first patch cycle after MVP:
 | Item | Owner | Priority |
 |---|---|---|
 | Increase test coverage threshold from 25% to 60% | Track 43 | High |
-| Add `api-health` to the default hard-gate (no `--health-url` flag required) | Track 41 | Medium |
 | Wire `--doctor` flag to onboarding CLI for self-diagnosis | Track 23 | Medium |
-| Integrate `npm run mvp:gate` into CI workflow | Track 38/44 | Medium |
 | **Epic: Windows Daemon & Onboarding Wizard** | Track 50 (E1) | High |
 | **Epic: Windows System Tray Companion App** | Track 51 (E2) | High |
 | **Epic: Extended Channels (Teams/Discord/Slack)** | Track 52 (E3) | Medium |

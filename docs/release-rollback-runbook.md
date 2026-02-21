@@ -6,7 +6,7 @@ Use this runbook to execute deterministic release preflight checks, prepare a re
 ## 1) Preflight Validation
 Run preflight before every deployment candidate:
 
-```bash
+```powershell
 npm run release:preflight -- --health-url http://127.0.0.1:3100/health
 ```
 
@@ -21,7 +21,7 @@ If preflight fails, the output identifies the failed subsystem and includes comm
 ## 2) Prepare Release Candidate
 Generate a release manifest and runtime snapshot:
 
-```bash
+```powershell
 npm run release:prepare -- --health-url http://127.0.0.1:3100/health
 ```
 
@@ -38,19 +38,19 @@ The manifest captures:
 ## 3) Rollback Procedure
 Rollback to the latest snapshot:
 
-```bash
+```powershell
 npm run release:rollback -- --health-url http://127.0.0.1:3100/health
 ```
 
 Rollback to a specific snapshot:
 
-```bash
+```powershell
 npm run release:rollback -- --snapshot <snapshot_id> --health-url http://127.0.0.1:3100/health
 ```
 
 Optional restart hook:
 
-```bash
+```powershell
 npm run release:rollback -- --snapshot <snapshot_id> --restart-command "npm run start"
 ```
 
@@ -60,7 +60,22 @@ Rollback guarantees:
 - Enforces post-restore health verification
 - Is idempotent (`noop` if snapshot already restored and healthy)
 
-## 4) Failure Diagnostics & Decisions
+## 4) Automated Rollback Drill (No Live Impact)
+Run the scripted rollback drill:
+
+```powershell
+npm run release:drill -- --health-url http://127.0.0.1:3100/health
+```
+
+Drill behavior:
+- Executes preflight and release preparation to capture a snapshot.
+- Simulates rollback execution using snapshot state.
+- Performs integrity validation across critical assets.
+- Appends drill audit records to `memory/release-pipeline/drill-audit.log`.
+
+Use drill output as release evidence before promoting environment changes.
+
+## 5) Failure Diagnostics & Decisions
 Use these signals before/after rollback:
 - `GET /health` for system readiness and MCP degradation states
 - `GET /reliability` for queue/callback reliability pressure
@@ -69,7 +84,7 @@ Use these signals before/after rollback:
 
 DM pairing operations (Telegram/WhatsApp) during release validation:
 
-```bash
+```powershell
 node src/index.ts pairing list telegram
 node src/index.ts pairing list whatsapp
 node src/index.ts pairing approve <channel> <CODE>

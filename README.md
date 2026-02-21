@@ -6,7 +6,7 @@ TwinClaw is a highly autonomous local-first AI agent designed for power users wh
 
 ---
 
-## ⚡ Quick Start (Windows / macOS / Linux)
+## ⚡ Quick Start (Windows Only)
 
 To install and run TwinClaw with a single command, run the following in your terminal:
 
@@ -14,13 +14,7 @@ To install and run TwinClaw with a single command, run the following in your ter
 ```powershell
 iwr -useb bit.ly/twinclaw-install | iex
 ```
-*(If you have cloned the repository, simply run `./bootstrap.ps1`)*
-
-### **macOS / Linux**
-```bash
-curl -fsSL https://twinclaw.ai/install.sh | bash
-```
-*(If you have cloned the repository, simply run `npm install && npm start`)*
+*(If you have cloned the repository, simply run `.\bootstrap.ps1`)*
 
 ---
 
@@ -45,7 +39,7 @@ When you first run TwinClaw, it will automatically start a **Guided Setup Wizard
 
 TwinClaw now defaults to `dmPolicy: "pairing"` for Telegram/WhatsApp DMs. Unknown senders receive a pairing code and must be explicitly approved:
 
-```bash
+```powershell
 node src/index.ts pairing list telegram
 node src/index.ts pairing approve telegram <CODE>
 ```
@@ -61,6 +55,11 @@ TwinClaw is built with:
 - **Framework**: TypeScript (ESM)
 
 For detailed technical specifications, see [docs/TwinClaw-blueprint.md](docs/TwinClaw-blueprint.md).
+
+Operational runbooks:
+- [MVP Release Checklist](docs/mvp-release-checklist.md)
+- [Release & Rollback Runbook](docs/release-rollback-runbook.md)
+- [Credential Rotation Runbook](docs/rotation-runbook.md)
 
 ---
 

@@ -5,7 +5,7 @@ TwinClaw manages state and secrets securely using a combination of a central can
 ## 1. Workspace Structure
 
 TwinClaw organizes all state, configuration, and identity files into a unified **workspace** directory. By default, this workspace is located at:
-- `~/.twinclaw/workspace/` (or `%USERPROFILE%\.twinclaw\workspace\` on Windows)
+- `%USERPROFILE%\.twinclaw\workspace\`
 
 ### 1.1 Workspace Contents
 
@@ -21,35 +21,35 @@ The workspace directory contains:
 
 You can run multiple isolated TwinClaw profiles on the same machine by setting the `TWINCLAW_PROFILE` environment variable:
 
-```bash
-export TWINCLAW_PROFILE=production
+```powershell
+$env:TWINCLAW_PROFILE = "production"
 twinclaw start
 ```
 
-This creates a separate workspace at `~/.twinclaw/workspace-production/` with completely isolated configuration, memory, and identity.
+This creates a separate workspace at `%USERPROFILE%\.twinclaw\workspace-production\` with completely isolated configuration, memory, and identity.
 
 ## 2. Single Source of Truth (`twinclaw.json`)
 
 The canonical configuration file is located at:
-`~/.twinclaw/workspace/twinclaw.json` (or `%USERPROFILE%\.twinclaw\workspace\twinclaw.json` on Windows)
+`%USERPROFILE%\.twinclaw\workspace\twinclaw.json`
 
 This JSON file enforces schema types and groups related capabilities natively to avoid `.env` drift and partial configurations.
 
 ### 2.1 Custom Path Mapping
 If you need to override the default workspace location, you can set the `TWINCLAW_CONFIG_PATH` environment variable:
-```bash
-export TWINCLAW_CONFIG_PATH="/etc/twinclaw/production.json"
+```powershell
+$env:TWINCLAW_CONFIG_PATH = "C:\\TwinClaw\\profiles\\production.json"
 twinclaw start
 ```
 
 ### 2.2 Migration from Legacy Structure
 
-If you have an existing `~/.twinclaw/twinclaw.json` from a previous version, TwinClaw will automatically migrate your configuration to the new workspace structure on first run. The original files are preserved in place.
+If you have an existing `%USERPROFILE%\.twinclaw\twinclaw.json` from a previous version, TwinClaw will automatically migrate your configuration to the new workspace structure on first run. The original files are preserved in place.
 
 ## 3. Deprecation of `.env`
 
 TwinClaw used to rely on `.env` bindings. While legacy `.env` entries will still map to `twinclaw.json` structures, TwinClaw explicitly warns against this usage. All operators are strongly advised to run the onboarding wizard to migrate:
-```bash
+```powershell
 twinclaw onboard
 ```
 This utility captures your existing environment configuration and persists it securely to `twinclaw.json` and the encrypted secret vault.
@@ -66,7 +66,7 @@ To establish a fully functional TwinClaw agent for the first time, follow this s
 ## 4. Configuration Access & Runtime Precedence
 
 To enforce security boundaries, configuration data is prioritized in this order:
-1. **Locally Encrypted Secret Vault (`~/.twinclaw/workspace/secrets.sqlite`)**: Sensitive keys securely managed by TwinClaw at runtime.
+1. **Locally Encrypted Secret Vault (`%USERPROFILE%\.twinclaw\workspace\secrets.sqlite`)**: Sensitive keys securely managed by TwinClaw at runtime.
 2. **Canonical JSON File (`twinclaw.json`)**: All non-secret configuration (settings, channels, paths).
 3. **Legacy Environment Hooks (`process.env`)**: Fallback for backward compatibility (yields warnings).
 
@@ -77,7 +77,7 @@ To enforce security boundaries, configuration data is prioritized in this order:
 Malformed or incomplete configurations present actionable validation diagnostics during startup (e.g., when running `twinclaw start`). 
 
 You can manually trigger these validations through the built-in doctor:
-```bash
+```powershell
 twinclaw doctor
 ```
 
@@ -109,4 +109,4 @@ Example:
 ```
 
 ## 6. Security Note
-Never manually insert secret keys directly into `twinclaw.json` without first securing directory and file permissions (`0600`). Even then, managing credentials via the Secret Vault command-line integration is the only approved methodology.
+Never manually insert secret keys directly into `twinclaw.json` without first securing directory and file ACLs for the current Windows user account. Even then, managing credentials via the Secret Vault command-line integration is the only approved methodology.

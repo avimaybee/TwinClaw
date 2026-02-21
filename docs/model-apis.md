@@ -1,12 +1,19 @@
- i have the glm-5 model api key which is free for a few months, i wanna use that model specifically: modal research API key: 
-modalresearch_yXCwHTY-zHzLDL1ZF3ajD3uJ7Tqy3yx1zA4OKBt9QqI
-https://api.us-west-2.modal.direct/v1
-"model": "zai-org/GLM-5-FP8"
+# Model APIs
 
-i also have this free openrouter model: 
-stepfun/step-3.5-flash:free
-OpenRouter API key:
-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
+This document provides reference information for configuring AI model providers in TwinClaw.
 
-and for the final fallback, we have the google ai studio api key: AIzaSyDO0MDPYhvsNZhg56x5XJYAbDoSqDJrAmo
-for gemini-flash-lite-latest model
+## Modal Research API (Primary)
+
+- **Endpoint**: `https://api.us-west-2.modal.direct/v1`
+- **Model**: `zai-org/GLM-5-FP8`
+- **Configuration**: Set the API key in `twinclaw.json` under `apiKeys.modal`
+
+## OpenRouter (Secondary/Fallback)
+
+- **Model**: `stepfun/step-3.5-flash:free`
+- **Configuration**: Set the API key in `twinclaw.json` under `apiKeys.openrouter`
+
+## Google AI Studio (Deep Context Fallback)
+
+- **Model**: `gemini-flash-lite-latest`
+- **Configuration**: Set the API key in `twinclaw.json` under `apiKeys.google`
