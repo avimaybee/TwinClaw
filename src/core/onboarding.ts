@@ -16,6 +16,7 @@ import { createSession, saveMessage } from '../services/db.js';
 import { indexConversationTurn, retrieveMemoryContext } from '../services/semantic-memory.js';
 import { ModelRouter } from '../services/model-router.js';
 import { logThought } from '../utils/logger.js';
+import { runSimplifiedOnboarding } from './simplified-onboarding.js';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -845,39 +846,6 @@ export async function handleOnboardCli(argv: string[]): Promise<boolean> {
     return false;
   }
 
-  const parsed = parseOnboardArgs(argv.slice(1));
-  if (parsed.help) {
-    printOnboardUsage();
-    process.exitCode = 0;
-    return true;
-  }
-  if (parsed.error) {
-    console.error(`[TwinClaw Onboard] ${parsed.error}`);
-    printOnboardUsage();
-    process.exitCode = 1;
-    return true;
-  }
-  if (!parsed.nonInteractive && Object.keys(parsed.values).length > 0) {
-    console.error(
-      '[TwinClaw Onboard] Value flags require --non-interactive. Use `onboard` alone for guided prompts.',
-    );
-    process.exitCode = 1;
-    return true;
-  }
-
-  const result = await runSetupWizard({
-    nonInteractive: parsed.nonInteractive,
-    providedValues: parsed.values,
-    configPathOverride: parsed.configPathOverride,
-  });
-
-  if (result.status === 'success') {
-    process.exitCode = 0;
-  } else if (result.status === 'cancelled') {
-    process.exitCode = 130;
-  } else {
-    process.exitCode = 1;
-  }
-
+  await runSimplifiedOnboarding();
   return true;
 }

@@ -8,8 +8,8 @@ services:
     ports:
       - "18789:18789"
     volumes:
-      - .:/app
-      - /app/node_modules
-      - ./memory:/app/src/memory
+      - ./data:/home/node/.twinclaw/workspace
+    environment:
+      - TWINCLAW_SAFE_CWD=/home/node/.twinclaw/workspace
     env_file:
       - .env

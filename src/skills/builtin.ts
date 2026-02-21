@@ -7,7 +7,14 @@ import { executeShell } from './shell.js';
 import { logToolCall } from '../utils/logger.js';
 
 function resolveWorkspacePath(inputPath: string): string {
-  return path.resolve(process.cwd(), inputPath);
+  const rootDir = process.env.TWINCLAW_SAFE_CWD ? path.resolve(process.env.TWINCLAW_SAFE_CWD) : process.cwd();
+  const resolved = path.resolve(rootDir, inputPath);
+
+  if (!resolved.startsWith(rootDir)) {
+    throw new Error(`Access denied: Path '${inputPath}' resolves outside the allowed workspace.`);
+  }
+
+  return resolved;
 }
 
 function quoteShellArg(value: string): string {
@@ -131,7 +138,7 @@ function buildApplyPatchSkill(): Skill {
         await writeFile(tempPatchPath, patchValue, 'utf8');
         const result = await executeShell(
           `git apply --whitespace=nowarn ${quoteShellArg(tempPatchPath)}`,
-          process.cwd(),
+          process.env.TWINCLAW_SAFE_CWD || process.cwd(),
           { timeoutMs: 20_000 },
         );
         if (!result.ok) {
