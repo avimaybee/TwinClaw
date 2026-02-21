@@ -14,6 +14,9 @@ import {
   type PairingChannel,
 } from '../services/dm-pairing.js';
 import type { Platform } from '../types/messaging.js';
+import { InboundDebounceService, type InboundDebounceOptions } from '../services/inbound-debounce.js';
+import { EmbeddedBlockChunker, type BlockChunkerOptions } from '../services/block-chunker.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 interface ChannelAccessConfig {
   dmPolicy: DmPolicy;
@@ -24,6 +27,8 @@ export interface DispatcherOptions {
   pairingService?: DmPairingService;
   telegram?: Partial<ChannelAccessConfig>;
   whatsapp?: Partial<ChannelAccessConfig>;
+  debounce?: Partial<InboundDebounceOptions>;
+  streaming?: Partial<BlockChunkerOptions> & { humanDelayMs?: number };
 }
 
 const DEFAULT_ACCESS_CONFIG: ChannelAccessConfig = {
@@ -61,6 +66,9 @@ export class Dispatcher {
   readonly #queue: QueueService;
   readonly #pairingService: DmPairingService;
   readonly #accessConfig: Record<Platform, ChannelAccessConfig>;
+  readonly #debounce: InboundDebounceService;
+  readonly #chunker: EmbeddedBlockChunker;
+  readonly #humanDelayMs: number;
 
   constructor(
     telegram: TelegramHandler | undefined,
@@ -82,10 +90,30 @@ export class Dispatcher {
       telegram: this.#resolveAccessConfig('telegram', options.telegram),
       whatsapp: this.#resolveAccessConfig('whatsapp', options.whatsapp),
     };
+    this.#debounce = new InboundDebounceService(options.debounce);
+    
+    const streamingEnabled = getConfigValue('BLOCK_STREAMING_DEFAULT') === 'true';
+    if (streamingEnabled) {
+      this.#chunker = new EmbeddedBlockChunker({
+        minChars: Number(getConfigValue('BLOCK_STREAMING_MIN_CHARS')) || 50,
+        maxChars: Number(getConfigValue('BLOCK_STREAMING_MAX_CHARS')) || 800,
+        breakOn: (getConfigValue('BLOCK_STREAMING_BREAK') as 'paragraph' | 'sentence') || 'paragraph',
+        coalesce: getConfigValue('BLOCK_STREAMING_COALESCE') !== 'false',
+      });
+      this.#humanDelayMs = Number(getConfigValue('HUMAN_DELAY_MS')) || 800;
+    } else {
+      this.#chunker = new EmbeddedBlockChunker({
+        minChars: options.streaming?.minChars ?? 50,
+        maxChars: options.streaming?.maxChars ?? 800,
+        breakOn: options.streaming?.breakOn ?? 'paragraph',
+        coalesce: options.streaming?.coalesce ?? true,
+      });
+      this.#humanDelayMs = options.streaming?.humanDelayMs ?? 0;
+    }
 
-    // Wire inbound message callbacks.
-    if (this.#telegram) this.#telegram.onMessage = (msg) => this.#handle(msg);
-    if (this.#whatsapp) this.#whatsapp.onMessage = (msg) => this.#handle(msg);
+    // Wire inbound message callbacks through debounce layer.
+    if (this.#telegram) this.#telegram.onMessage = (msg) => this.#handleDebounced(msg);
+    if (this.#whatsapp) this.#whatsapp.onMessage = (msg) => this.#handleDebounced(msg);
   }
 
   /** Expose the queue service for reliability and dead-letter controls. */
@@ -93,7 +121,23 @@ export class Dispatcher {
     return this.#queue;
   }
 
+  get debounceService(): InboundDebounceService {
+    return this.#debounce;
+  }
+
   // ── Core Dispatch Loop ────────────────────────────────────────────────────────
+
+  async #handleDebounced(message: InboundMessage): Promise<void> {
+    try {
+      const debounced = await this.#debounce.debounce(message);
+      await this.#handle(debounced);
+    } catch (err) {
+      console.error('[Dispatcher] Unhandled error in debounce handling:', err);
+      await logThought(
+        `[Dispatcher] Debounce error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   async #handle(message: InboundMessage): Promise<void> {
     try {
@@ -183,22 +227,57 @@ export class Dispatcher {
 
   /**
    * Route the gateway's response back to the originating platform
-   * via the persistent delivery queue.
+   * via the persistent delivery queue. Chunks text if block streaming is enabled.
    */
   async #dispatch(origin: InboundMessage, responseText: string): Promise<void> {
-    this.#queue.enqueue(origin.platform, origin.chatId, responseText);
+    const safeText = EmbeddedBlockChunker.ensureCodeFenceClosed(responseText);
+    const chunks = this.#chunker.chunk(safeText);
+
+    if (chunks.length <= 1) {
+      this.#queue.enqueue(origin.platform, origin.chatId, responseText);
+      return;
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+      const isLast = i === chunks.length - 1;
+      const chunk = chunks[i];
+      
+      this.#queue.enqueue(origin.platform, origin.chatId, chunk);
+
+      if (!isLast && this.#humanDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.#humanDelayMs));
+      }
+    }
   }
 
   /**
    * Send a proactive (agent-initiated) message to a specific platform target
-   * via the persistent delivery queue.
+   * via the persistent delivery queue. Uses chunking if enabled.
    */
   async sendProactive(platform: string, chatId: string | number, text: string): Promise<void> {
-    this.#queue.enqueue(platform, chatId, text);
+    const safeText = EmbeddedBlockChunker.ensureCodeFenceClosed(text);
+    const chunks = this.#chunker.chunk(safeText);
+
+    if (chunks.length <= 1) {
+      this.#queue.enqueue(platform, chatId, text);
+      return;
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+      const isLast = i === chunks.length - 1;
+      const chunk = chunks[i];
+      
+      this.#queue.enqueue(platform, chatId, chunk);
+
+      if (!isLast && this.#humanDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.#humanDelayMs));
+      }
+    }
   }
 
   /** Tear down all active interface adapters cleanly. */
   shutdown(): void {
+    this.#debounce.clear();
     this.#telegram?.stop();
     this.#whatsapp?.stop();
   }
