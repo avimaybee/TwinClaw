@@ -33,7 +33,8 @@ TwinClaw is a zero-cost, local-first autonomous agentic service inspired by the 
 - **Failover Logic:** Implements `simple-shuffle` routing to handle strict free-tier limits by temporarily placing blocked providers on cooldown and seamlessly retrying with fallbacks, ensuring uninterrupted native tool-call execution.
 
 ### 4.3 Identity & State Management
-TwinClaw adopts the established OpenClaw pattern of persisting the agent's identity and state locally using human-readable Markdown files, allowing users to deeply customize the agent simply by conversing with it.
+TwinClaw adopts the established OpenClaw pattern of persisting the agent's identity and state locally using human-readable Markdown files and a centralized JSON configuration, allowing users to deeply customize the agent simply by conversing with it.
+- **`twinclaw.json`**: The **mandatory single source of truth** for all API keys, channel configurations, and default settings. It is initialized via `twinclaw onboard` and located at `~/.twinclaw/twinclaw.json`, strictly replacing fragile `.env` files and legacy environment variable injection.
 - **`soul.md`**: The agent's constitution. Defines its core personality, operational tone, behavioral boundaries, and unbreakable directives. It ensures the AI remains stable across multiple contexts.
 - **`identity.md`**: Defines the agent's specific persona, name, role, and situational awareness to shape its operational behavior.
 - **`memory.md`**: Reserved for curated, persistent long-term facts, preferences, and crucial information that must be remembered persistently across sessions. 
@@ -52,8 +53,9 @@ TwinClaw adopts the established OpenClaw pattern of persisting the agent's ident
 
 ### 4.6 Remote Access & Messaging Integrations
 - Implements remote interfaces via **WhatsApp** and **Telegram** to maximize accessibility from mobile devices.
-- **WhatsApp:** Relies on free local-hosting wrappers (Evolution API or WAHA/Baileys) requiring the user to scan a terminal QR code, bypassing Meta's official Cloud API costs.
+- **WhatsApp:** Relies on free local-hosting wrappers (Evolution API or WAHA/Baileys) requiring the user to scan a terminal QR code via `twinclaw channels login`, bypassing Meta's official Cloud API costs.
 - **Telegram:** Leverages official bot token WebHooks or Polling natively, offering highly responsive zero-cost cross-platform messaging.
+- **DM Pairing Security:** To prevent unauthorized access without complex whitelists, the system enforces a pairing policy (`dmPolicy: "pairing"`). When an unknown user messages the agent, it responds with a unique pairing code. The operator must then run `twinclaw pairing approve <channel> <code>` in the host terminal to authorize that specific user ID for all future interactions.
 - Incorporates strict behavioral safety limits (human-like rate-limiting, avoidance of broadcast messages) to mitigate the risk of account bans on standard WhatsApp accounts.
 
 ## 5. System Schemas & API Contracts
@@ -90,12 +92,12 @@ model_list:
     litellm_params:
       model: openai/zai-org/GLM-5-FP8  # Modal Research OpenAI-Compatible endpoint
       api_base: https://api.us-west-2.modal.direct/v1
-      api_key: os.environ/MODAL_API_KEY
+      api_key: twinclaw.json/apiKeys/modal
       rpm: 10
   - model_name: TwinClaw-primary
     litellm_params:
       model: openrouter/stepfun/step-3.5-flash:free
-      api_key: os.environ/OPENROUTER_API_KEY
+      api_key: twinclaw.json/apiKeys/openrouter
       rpm: 15
 
 router_settings:
@@ -134,12 +136,32 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_memory USING vec0(
 
 ## 6. Execution Privileges & Security Operations
 - **Core Principle:** The agent is deliberately provided access to Node's `child_process.exec` to execute raw bash commands autonomously without strict Human-in-the-Loop blocking prompts.
-- **Protection Measures:** `.env` parsing must strictly rely on `dotenv-vault` to prevent API key leakage into source control. Routine Regex scrubbers must sanitize the agent's stdout before saving records to the plaintext SQLite `messages` table, ensuring API bills are not compromised even while filesystem functionality remains unrestricted.
+- **Protection Measures:** Secrets and API keys are stored exclusively in `twinclaw.json` with restricted filesystem permissions (`chmod 600`). This centralized model completely replaces `.env` or `dotenv-vault` systems, eliminating the risk of accidental environment leakage in logs or subprocesses. Routine Regex scrubbers further sanitize the agent's stdout before persistence to the SQLite `messages` table, protecting API keys even during unrestricted shell execution.
 
 ## 7. Implementation Roadmap
-1. **Phase 1: Core Infrastructure & Identity** – Initialize workspace, enforce `dotenv-vault`, and establish `soul.md` and `identity.md` architectures.
+1. **Phase 1: Core Infrastructure & CLI Onboarding** – Implement the `twinclaw onboard` interactive wizard as the primary entry point for environment setup, generating the foundational `twinclaw.json` config and initializing local `soul.md` and `identity.md` personas.
 2. **Phase 2: Gateway Layer** – Build the WebSocket control plane and lane-based serial execution loop.
 3. **Phase 3: Model Routing & Native Tools** – Configure local LiteLLM proxy utilizing GLM-5 and stepfun models, hooking into their native tool-calling features.
 4. **Phase 4: SQLite-vec Memory** – Write schemas, the embedding processing pipeline mapping to `memory.md`, and RAG contextual integration logic.
 5. **Phase 5: Multimodal Integration** – Script Playwright accessibility parsing and VLM screenshot overlay logic for autonomous web surfing.
 6. **Phase 6: Proactive Messaging** – Launch localized watcher (`chokidar`), orchestrate cron background SQLite workers (`Sidequest.js`), and deploy WhatsApp/Telegram listeners.
+7. **Phase 7: Windows Ecosystem Expansion** – (Post-MVP) Integrate Windows Service daemon, System Tray companion app, and PowerShell node capabilities.
+
+## 8. Post-MVP Feature Additions (Windows Focus)
+
+Building upon the OpenClaw architecture, TwinClaw will expand into a deeply integrated Windows administrative agent.
+
+### 8.1 Windows Native Presence
+- **TwinClaw CLI Wizard:** An `openclaw onboard` style terminal wizard for Windows.
+- **Daemon Implementation:** Autonomic installation of TwinClaw as a Windows Service or Startup Task, ensuring constant background availability without a visible terminal.
+- **System Tray Companion:** A lightweight Windows Tray application providing quick health status, Voice Wake (Push-to-Talk) overlay, and a "Talk Mode" visual workspace.
+
+### 8.2 System Capability Nodes
+- **PowerShell Integration:** Expanding `system.run` to natively support signed/unsigned PowerShell `.ps1` execution for advanced system orchestration.
+- **Native Toast Notifications:** Support for `system.notify` leveraging standard Windows Action Center toast notifications.
+- **Media Capture:** Implementation of `camera.snap`, `camera.clip`, and `screen.record` via Windows-native APIs.
+
+### 8.3 Connectivity & Remote Access
+- **Tailscale Serve/Funnel:** Automated configuration of Tailscale tunnels to expose the Gateway dashboard and WebSocket over a secure, authenticated link.
+- **Extended Channels:** Native integration for Microsoft Teams, Discord, Slack, and an embedded WebChat UI.
+- **Canvas & A2UI:** Deployment of the A2UI Live Canvas rendering engine for agent-driven visual output.
