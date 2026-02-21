@@ -152,4 +152,13 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## Active Tracks
 
-(End of file)
+- [ ] **Track 68: TwinBot NPM Command & Package Alias Contract**
+  *Link: [./tracks/twinbot_npm_command_contract_20260221/](./tracks/twinbot_npm_command_contract_20260221/)*
+- [ ] **Track 69: One-Command Windows Installer (`twinbot install`)**
+  *Link: [./tracks/twinbot_windows_installer_20260221/](./tracks/twinbot_windows_installer_20260221/)*
+- [x] **Track 70: Onboarding Wizard UX 2.0 (Interactive Stepper)**
+  *Link: [./tracks/onboarding_wizard_ux2_20260221/](./tracks/onboarding_wizard_ux2_20260221/)*
+- [~] **Track 71: Install + Onboard E2E Smoke Gates**
+  *Link: [./tracks/install_onboard_smoke_gates_20260221/](./tracks/install_onboard_smoke_gates_20260221/)*
+- [~] **Track 72: MVP Docs & Command Surface Reconciliation**
+  *Link: [./tracks/mvp_docs_command_reconciliation_20260221/](./tracks/mvp_docs_command_reconciliation_20260221/)*

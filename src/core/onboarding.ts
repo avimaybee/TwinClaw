@@ -114,6 +114,37 @@ interface WizardLogger {
   error: (...args: unknown[]) => void;
 }
 
+type OnboardSectionId = 'runtime' | 'models' | 'messaging' | 'memory' | 'summary';
+
+interface WizardSection {
+  id: OnboardSectionId;
+  label: string;
+  fields: OnboardConfigKey[];
+}
+
+const WIZARD_SECTIONS: readonly WizardSection[] = [
+  {
+    id: 'runtime',
+    label: 'Runtime & Security',
+    fields: ['API_SECRET', 'API_PORT'],
+  },
+  {
+    id: 'models',
+    label: 'Intelligence & Models',
+    fields: ['OPENROUTER_API_KEY', 'MODAL_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY'],
+  },
+  {
+    id: 'messaging',
+    label: 'Messaging & Channels',
+    fields: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_USER_ID', 'WHATSAPP_PHONE_NUMBER'],
+  },
+  {
+    id: 'memory',
+    label: 'Memory & Workspace Defaults',
+    fields: ['EMBEDDING_PROVIDER'],
+  },
+];
+
 const EMBEDDING_PROVIDERS = new Set(['openai', 'ollama']);
 const MODEL_KEYS: readonly OnboardConfigKey[] = [
   'OPENROUTER_API_KEY',
@@ -485,7 +516,7 @@ async function collectInteractiveUpdates(
   prompter: SetupPrompter,
 ): Promise<OnboardUpdateMap> {
   const workspaceDir = getWorkspaceDir();
-  logger.log('\nTwinClaw Onboarding Wizard');
+  logger.log('\nTwinClaw Onboarding Wizard v2.0');
   logger.log('──────────────────────────────────────────────────');
   logger.log(`Workspace: ${workspaceDir}`);
   logger.log('Model keys, channel preferences, and workspace defaults will be configured.');
@@ -494,32 +525,106 @@ async function collectInteractiveUpdates(
   const updates: OnboardUpdateMap = {};
   let candidate = cloneConfig(existing);
 
-  for (const field of ONBOARD_FIELDS) {
-    const current = readConfigValue(candidate, field.key);
-    const nextValue = await promptFieldValue(field, current, prompter, logger);
-    if (nextValue !== undefined) {
-      updates[field.key] = nextValue;
-      candidate = applyUpdates(candidate, { [field.key]: nextValue });
-    }
-  }
+  for (const section of WIZARD_SECTIONS) {
+    while (true) {
+      logger.log(`\nSection: ${section.label}`);
+      logger.log('──────────────────────────────────────────────────');
+      for (const fieldKey of section.fields) {
+        const field = ONBOARD_FIELDS.find((item) => item.key === fieldKey);
+        if (!field) {
+          continue;
+        }
+        const current = readConfigValue(candidate, field.key);
+        const nextValue = await promptFieldValue(field, current, prompter, logger);
+        if (nextValue !== undefined) {
+          updates[field.key] = nextValue;
+          candidate = applyUpdates(candidate, { [field.key]: nextValue });
+        }
+      }
 
-  while (!hasAnyModelKey(candidate)) {
-    logger.warn('\nAt least one model API key is required.');
-    for (const key of MODEL_KEYS) {
-      const field = ONBOARD_FIELDS.find((item) => item.key === key);
-      if (!field) {
+      if (section.id === 'models' && !hasAnyModelKey(candidate)) {
+        logger.warn('\nAt least one model API key is required (OpenRouter, Modal, or Gemini).');
         continue;
       }
-      const current = readConfigValue(candidate, key);
-      const nextValue = await promptFieldValue(field, current, prompter, logger);
-      if (nextValue !== undefined) {
-        updates[key] = nextValue;
-        candidate = applyUpdates(candidate, { [key]: nextValue });
+
+      if (section.id === 'messaging') {
+        const telegramToken = (candidate.messaging.telegram.botToken ?? '').trim();
+        const telegramUserId = candidate.messaging.telegram.userId;
+        if (hasValue(telegramToken) && !telegramUserId) {
+          logger.warn('\nTELEGRAM_USER_ID is required when TELEGRAM_BOT_TOKEN is provided.');
+          continue;
+        }
+        if (!hasValue(telegramToken) && telegramUserId) {
+          logger.warn('\nTELEGRAM_BOT_TOKEN is required when TELEGRAM_USER_ID is provided.');
+          continue;
+        }
       }
+
+      break;
     }
   }
 
-  return updates;
+  while (true) {
+    logger.log('\nSummary of Configuration:');
+    logger.log('──────────────────────────────────────────────────');
+    for (const field of ONBOARD_FIELDS) {
+      const val = readConfigValue(candidate, field.key);
+      const displayVal =
+        field.secret || SECRET_KEYS.has(field.key)
+          ? val
+            ? '********'
+            : '(not set)'
+          : val || '(not set)';
+      logger.log(`  ${field.label}: ${displayVal}`);
+    }
+
+    const choice = await prompter.prompt('\nConfirm configuration? [y]es, [n]o (cancel), [e]dit: ');
+    const lower = choice.toLowerCase();
+
+    if (lower === 'y' || lower === 'yes') {
+      if (!hasAnyModelKey(candidate)) {
+        logger.warn('\nAt least one model API key is required (OpenRouter, Modal, or Gemini).');
+        continue;
+      }
+      return updates;
+    }
+
+    if (lower === 'n' || lower === 'no') {
+      throw new OnboardingCancelledError();
+    }
+
+    if (lower === 'e' || lower === 'edit') {
+      logger.log('\nSelect section to edit:');
+      WIZARD_SECTIONS.forEach((s, i) => {
+        logger.log(`  ${i + 1}. ${s.label}`);
+      });
+      const sectionIdxStr = await prompter.prompt('\nSection number: ');
+      const sectionIdx = Number.parseInt(sectionIdxStr, 10) - 1;
+
+      if (WIZARD_SECTIONS[sectionIdx]) {
+        const section = WIZARD_SECTIONS[sectionIdx];
+        logger.log(`\nEditing Section: ${section.label}`);
+        logger.log('──────────────────────────────────────────────────');
+        for (const fieldKey of section.fields) {
+          const field = ONBOARD_FIELDS.find((item) => item.key === fieldKey);
+          if (!field) {
+            continue;
+          }
+          const current = readConfigValue(candidate, field.key);
+          const nextValue = await promptFieldValue(field, current, prompter, logger);
+          if (nextValue !== undefined) {
+            updates[field.key] = nextValue;
+            candidate = applyUpdates(candidate, { [field.key]: nextValue });
+          }
+        }
+      } else {
+        logger.warn('Invalid section number.');
+      }
+      continue;
+    }
+
+    logger.warn("Please enter 'y', 'n', or 'e'.");
+  }
 }
 
 export function validateOnboardConfig(config: TwinClawConfig): OnboardValidationResult {
