@@ -105,7 +105,8 @@ describe('Native tool inventory harmonization', () => {
 
       const response = await gateway.processText(`patch-test-${randomUUID()}`, 'Apply the pending patch.');
       expect(response).toContain('Patch complete');
-      expect(await readFile(targetFilePath, 'utf8')).toBe('beta\n');
+      const content = await readFile(targetFilePath, 'utf8');
+      expect(content.replace(/\r\n/g, '\n')).toBe('beta\n');
     } finally {
       router.detachFetchMock();
     }

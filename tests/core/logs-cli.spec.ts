@@ -5,6 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { handleLogsCli } from '../../src/core/logs-cli.js';
 
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    watch: vi.fn(),
+  };
+});
+
 function currentDateIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -59,8 +67,11 @@ describe('handleLogsCli', () => {
     await writeFile(path.join(tempDir, 'memory', `${currentDateIso()}.md`), '', 'utf8');
 
     const logs: string[] = [];
-    vi.spyOn(console, 'log').mockImplementation((...args) => logs.push(args.join(' ')));
-    vi.spyOn(fs, 'watch').mockImplementation(() => ({ close: () => undefined }) as fs.FSWatcher);
+    vi.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    vi.mocked(fs.watch).mockImplementation(() => ({ close: () => undefined } as fs.FSWatcher));
 
     const handled = await handleLogsCli(['logs', '--follow']);
     expect(handled).toBe(true);
