@@ -23,7 +23,7 @@ TwinClaw is a zero-cost, local-first autonomous agentic service that empowers us
 - **Persistent Semantic Memory:** SQLite-backed vector RAG (via `sqlite-vec`) ensuring the agent remembers facts, preferences, and history across sessions.
 - **Proactive Execution:**
   - **Background Jobs:** `node-cron` (`JobScheduler` service) for centralized proactive task orchestration and heartbeat messages.
-  - **File Watching:** `chokidar` for cross-platform local workspace and identity directory monitoring.
+  - **File Watching:** `chokidar` for Windows-native local workspace and identity directory monitoring.
   - **Proactive Notifications:** `ProactiveNotifier` service bridging background events to outbound messaging platforms.
 - **MCP Skill Registry:** Extensible tool catalog supporting both local builtins and Model Context Protocol (MCP) backed external integrations (GitHub, web search, databases, browser automation, and more).
 
