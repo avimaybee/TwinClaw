@@ -122,15 +122,17 @@ export function startApiServer(deps: ApiServerDeps): void {
     app.get('/health', handleHealth(healthDeps));
     app.get('/health/live', handleLiveness());
     app.get('/health/ready', handleReadiness(healthDeps));
-    app.get('/config/validate', handleConfigValidate());
-    app.get('/backup/diagnostics', handleLocalStateBackupDiagnostics(localStateBackupDeps));
-    app.post('/backup/snapshot', handleLocalStateCreateSnapshot(localStateBackupDeps));
-    app.post('/backup/restore', handleLocalStateRestoreSnapshot(localStateBackupDeps));
-    app.get('/skills/packages', handleSkillPackageDiagnostics(skillPackageDeps));
-    app.post('/skills/packages/install', handleSkillPackageInstall(skillPackageDeps));
-    app.post('/skills/packages/upgrade', handleSkillPackageUpgrade(skillPackageDeps));
-    app.post('/skills/packages/uninstall', handleSkillPackageUninstall(skillPackageDeps));
-    app.get('/reliability', (_req, res) => {
+
+    // Protected endpoints
+    app.get('/config/validate', requireSignature, handleConfigValidate());
+    app.get('/backup/diagnostics', requireSignature, handleLocalStateBackupDiagnostics(localStateBackupDeps));
+    app.post('/backup/snapshot', requireSignature, handleLocalStateCreateSnapshot(localStateBackupDeps));
+    app.post('/backup/restore', requireSignature, handleLocalStateRestoreSnapshot(localStateBackupDeps));
+    app.get('/skills/packages', requireSignature, handleSkillPackageDiagnostics(skillPackageDeps));
+    app.post('/skills/packages/install', requireSignature, handleSkillPackageInstall(skillPackageDeps));
+    app.post('/skills/packages/upgrade', requireSignature, handleSkillPackageUpgrade(skillPackageDeps));
+    app.post('/skills/packages/uninstall', requireSignature, handleSkillPackageUninstall(skillPackageDeps));
+    app.get('/reliability', requireSignature, (_req, res) => {
         const queueMetrics = deps.dispatcher?.queue.getStats() ?? null;
         const callbackCounts = getCallbackOutcomeCounts();
         const callbackMetrics = {
@@ -144,7 +146,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             callbacks: callbackMetrics
         });
     });
-    app.get('/budget/state', (req, res) => {
+    app.get('/budget/state', requireSignature, (req, res) => {
         if (!deps.budgetGovernor) {
             sendError(res, 'Runtime budget governor not initialized.', 503);
             return;
@@ -153,7 +155,7 @@ export function startApiServer(deps: ApiServerDeps): void {
         const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : undefined;
         sendOk(res, deps.budgetGovernor.getSnapshot(sessionId));
     });
-    app.get('/budget/events', (req, res) => {
+    app.get('/budget/events', requireSignature, (req, res) => {
         if (!deps.budgetGovernor) {
             sendError(res, 'Runtime budget governor not initialized.', 503);
             return;
@@ -206,7 +208,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             snapshot: deps.budgetGovernor.getSnapshot(sessionId),
         });
     });
-    app.get('/routing/telemetry', (_req, res) => {
+    app.get('/routing/telemetry', requireSignature, (_req, res) => {
         if (!deps.modelRouter) {
             sendError(res, 'Model router not initialized.', 503);
             return;
@@ -232,7 +234,7 @@ export function startApiServer(deps: ApiServerDeps): void {
         });
     });
 
-    app.get('/logs', async (_req, res) => {
+    app.get('/logs', requireSignature, async (_req, res) => {
         try {
             const dateIso = new Date().toISOString().slice(0, 10);
             const logPath = path.resolve('memory', `${dateIso}.md`);
@@ -257,8 +259,12 @@ export function startApiServer(deps: ApiServerDeps): void {
         }
     });
 
-    app.post('/reliability/replay/:id', (_req, res) => {
+    app.post('/reliability/replay/:id', requireSignature, (_req, res) => {
         const id = _req.params.id;
+        if (typeof id !== 'string') {
+            sendError(res, 'Invalid ID', 400);
+            return;
+        }
         if (!deps.dispatcher) {
             sendError(res, 'Dispatcher not active.', 500);
             return;
@@ -270,7 +276,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             sendError(res, `Failed to requeue: ${err instanceof Error ? err.message : String(err)}`, 500);
         }
     });
-    app.get('/incidents/current', (_req, res) => {
+    app.get('/incidents/current', requireSignature, (_req, res) => {
         if (!deps.incidentManager) {
             sendError(res, 'Incident manager not initialized.', 503);
             return;
@@ -281,7 +287,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             incidents: deps.incidentManager.getCurrentIncidents(),
         });
     });
-    app.get('/incidents/history', (req, res) => {
+    app.get('/incidents/history', requireSignature, (req, res) => {
         if (!deps.incidentManager) {
             sendError(res, 'Incident manager not initialized.', 503);
             return;
@@ -297,7 +303,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             timeline: deps.incidentManager.getIncidentTimeline(limit),
         });
     });
-    app.post('/incidents/evaluate', (_req, res) => {
+    app.post('/incidents/evaluate', requireSignature, (_req, res) => {
         if (!deps.incidentManager) {
             sendError(res, 'Incident manager not initialized.', 503);
             return;
@@ -309,10 +315,10 @@ export function startApiServer(deps: ApiServerDeps): void {
             incidents,
         });
     });
-    app.get('/persona/state', handlePersonaStateGet(personaStateDeps));
-    app.put('/persona/state', handlePersonaStateUpdate(personaStateDeps));
-    app.post('/browser/snapshot', handleBrowserSnapshot(browserDeps));
-    app.post('/browser/click', handleBrowserClick(browserDeps));
+    app.get('/persona/state', requireSignature, handlePersonaStateGet(personaStateDeps));
+    app.put('/persona/state', requireSignature, handlePersonaStateUpdate(personaStateDeps));
+    app.post('/browser/snapshot', requireSignature, handleBrowserSnapshot(browserDeps));
+    app.post('/browser/click', requireSignature, handleBrowserClick(browserDeps));
     app.post('/callback/webhook', requireSignature, handleWebhookCallback(callbackDeps));
 
     app.post('/system/halt', requireSignature, (_req, res) => {
@@ -322,7 +328,7 @@ export function startApiServer(deps: ApiServerDeps): void {
         setTimeout(() => process.exit(0), 500);
     });
 
-    app.get('/ws/metrics', (_req, res) => {
+    app.get('/ws/metrics', requireSignature, (_req, res) => {
         if (!deps.wsHub) {
             sendError(res, 'WebSocket hub not initialized.', 503);
             return;

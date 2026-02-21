@@ -12,6 +12,12 @@ RUN npm install
 # Copy project files
 COPY . .
 
+# Create workspace directory and set permissions
+RUN mkdir -p /app/workspace && chown -R node:node /app
+
+# Switch to non-root user
+USER node
+
 # Expose gateway port
 EXPOSE 18789
 
