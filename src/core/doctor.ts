@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { getConfigPath } from '../config/json-config.js';
 import type {
@@ -11,6 +11,8 @@ import type {
 } from '../types/doctor.js';
 import { getConfigValue } from '../config/config-loader.js';
 import { getSecretVaultService } from '../services/secret-vault.js';
+import { getIdentityDir, getWorkspaceSubdir } from '../config/workspace.js';
+import { IDENTITY_FILE_CHECKS } from '../config/identity-bootstrap.js';
 
 // ── Built-in check definitions ───────────────────────────────────────────────
 
@@ -103,6 +105,7 @@ export const FILESYSTEM_CHECKS: DoctorCheck[] = [
     remediation:
       'Copy .env.example to .env and fill in required values: cp .env.example .env',
   },
+  ...IDENTITY_FILE_CHECKS,
 ];
 
 export const CONFIG_CHECKS: DoctorCheck[] = [
@@ -111,7 +114,7 @@ export const CONFIG_CHECKS: DoctorCheck[] = [
     name: 'twinclaw.json',
     description: 'TwinClaw local JSON configuration schema',
     severity: 'critical',
-    remediation: 'Run `node src/index.ts setup` to initialize or repair your configuration.',
+    remediation: 'Run `node src/index.ts onboard` to initialize or repair your configuration.',
   }
 ];
 
@@ -139,10 +142,7 @@ export const DEFAULT_CHECKS: DoctorCheck[] = [
 /** @internal exported for testing */
 export function checkBinary(check: DoctorCheck): DoctorCheckResult {
   try {
-    const cmd =
-      process.platform === 'win32'
-        ? `where ${check.name}`
-        : `which ${check.name}`;
+    const cmd = `where ${check.name}`;
     execSync(cmd, { stdio: 'pipe', timeout: 5_000 });
 
     if (check.name === 'node') {
@@ -210,6 +210,9 @@ export function checkFilesystem(check: DoctorCheck): DoctorCheckResult {
   const targetMap: Record<string, string> = {
     'memory-dir': path.resolve('memory'),
     'env-file': path.resolve('.env'),
+    'identity-soul': path.join(getIdentityDir(), 'soul.md'),
+    'identity-identity': path.join(getIdentityDir(), 'identity.md'),
+    'identity-memory': path.join(getWorkspaceSubdir('memory'), 'memory.md'),
   };
 
   const target = targetMap[check.name];
@@ -221,7 +224,7 @@ export function checkFilesystem(check: DoctorCheck): DoctorCheckResult {
     };
   }
 
-  if (!existsSync(target)) {
+  if (!fs.existsSync(target)) {
     return {
       check,
       passed: false,
@@ -243,7 +246,7 @@ export function checkFilesystem(check: DoctorCheck): DoctorCheckResult {
 /** @internal exported for testing */
 export function checkConfigSchema(check: DoctorCheck): DoctorCheckResult {
   const configPath = getConfigPath();
-  if (!existsSync(configPath)) {
+  if (!fs.existsSync(configPath)) {
     return {
       check,
       passed: false,
@@ -252,7 +255,7 @@ export function checkConfigSchema(check: DoctorCheck): DoctorCheckResult {
   }
 
   try {
-    const raw = readFileSync(configPath, 'utf8');
+    const raw = fs.readFileSync(configPath, 'utf8');
     JSON.parse(raw);
     return {
       check,
@@ -273,7 +276,7 @@ export function checkConfigSchema(check: DoctorCheck): DoctorCheckResult {
 export function checkChannelAuth(check: DoctorCheck): DoctorCheckResult {
   if (check.name === 'whatsapp') {
     const authDir = path.resolve('memory', 'whatsapp_auth');
-    if (!existsSync(authDir)) {
+    if (!fs.existsSync(authDir)) {
       return {
         check,
         passed: false,

@@ -1,0 +1,10 @@
+{
+  "id": "57",
+  "title": "Secrets Hygiene & Credential Rotation Sweep",
+  "description": "Purge committed secrets and establish rotation runbooks.",
+  "status": "completed",
+  "owner": "security",
+  "priority": "high",
+  "created_at": "2026-02-21",
+  "labels": ["security", "cleanup"]
+}

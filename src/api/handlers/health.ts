@@ -39,11 +39,11 @@ export function handleHealth(deps: HealthDeps) {
         const data: HealthData = {
             status:
                 servers.some((s) => s.state === 'error') ||
-                packageDiagnostics.blockedPackageCount > 0 ||
-                secretDiagnostics.health.hasIssues ||
-                budgetSnapshot?.directive.severity === 'hard_limit' ||
-                (routingSnapshot?.consecutiveFailures ?? 0) >= 3 ||
-                backupDiagnostics?.status === 'degraded'
+                    packageDiagnostics.blockedPackageCount > 0 ||
+                    secretDiagnostics.health.hasIssues ||
+                    budgetSnapshot?.directive.severity === 'hard_limit' ||
+                    (routingSnapshot?.consecutiveFailures ?? 0) >= 3 ||
+                    backupDiagnostics?.status === 'degraded'
                     ? 'degraded'
                     : 'ok',
             uptimeSec: Math.floor((Date.now() - startTime) / 1000),
@@ -111,5 +111,34 @@ export function handleHealth(deps: HealthDeps) {
         };
 
         sendOk(res, data);
+    };
+}
+
+/** GET /health/live — Fast liveness probe for orchestrators (e.g. k8s) */
+export function handleLiveness() {
+    return (_req: Request, res: Response): void => {
+        sendOk(res, { status: 'alive', uptimeSec: Math.floor((Date.now() - startTime) / 1000) });
+    };
+}
+
+/** GET /health/ready — Readiness probe for load balancers */
+export function handleReadiness(deps: HealthDeps) {
+    return (_req: Request, res: Response): void => {
+        const heartbeatRunning = deps.heartbeat.scheduler
+            .listJobs()
+            .some((j) => j.status === 'running');
+
+        if (!heartbeatRunning) {
+            res.status(503).json({ status: 'not_ready', reason: 'Heartbeat scheduler offline' });
+            return;
+        }
+
+        const secretDiagnostics = getSecretVaultService().getDiagnostics(['API_SECRET']);
+        if (secretDiagnostics.health.missingRequired.length > 0) {
+            res.status(503).json({ status: 'not_ready', reason: 'Missing critical secrets' });
+            return;
+        }
+
+        sendOk(res, { status: 'ready' });
     };
 }

@@ -52,6 +52,7 @@ const SNAPSHOT_TARGETS: SnapshotTarget[] = [
   { id: 'identity-dir', scope: 'identity', relativePath: 'identity', kind: 'directory' },
   { id: 'memory-dir', scope: 'memory', relativePath: 'memory', kind: 'directory' },
   { id: 'runtime-db', scope: 'runtime-db', relativePath: path.join('memory', 'twinclaw.db'), kind: 'file' },
+  { id: 'twinclaw-config', scope: 'config', relativePath: 'twinclaw.json', kind: 'file' },
   {
     id: 'policy-profiles',
     scope: 'policy-profiles',

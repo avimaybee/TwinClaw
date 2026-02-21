@@ -95,3 +95,21 @@ export interface RollbackResult {
   healthCheck: ReleaseCheckResult;
   diagnostics: string[];
 }
+
+export type DrillStatus = 'passed' | 'failed';
+
+export interface DrillResult {
+  status: DrillStatus;
+  drillId: string;
+  startedAt: string;
+  completedAt: string;
+  simulatedFailure: boolean;
+  snapshotRestored: boolean;
+  preflightResult: PreflightResult | null;
+  rollbackResult: RollbackResult | null;
+  integrityCheck: {
+    passed: boolean;
+    issues: string[];
+  };
+  diagnostics: string[];
+}

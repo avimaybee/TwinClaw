@@ -1,0 +1,12 @@
+validateRuntimeConfig > reports format_error for out-of-range API_PORT
+  AssertionError: expected undefined to be defined
+    at D:/vs code/TwinBot/tests/services/config-env-validation.spec.ts:230:25
+    at file:///D:/vs%20code/TwinBot/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///D:/vs%20code/TwinBot/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///D:/vs%20code/TwinBot/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///D:/vs%20code/TwinBot/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///D:/vs%20code/TwinBot/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///D:/vs%20code/TwinBot/node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///D:/vs%20code/TwinBot/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///D:/vs%20code/TwinBot/node_modules/@vitest/runner/dist/index.js:1653:12)

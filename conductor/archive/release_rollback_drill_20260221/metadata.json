@@ -1,0 +1,10 @@
+{
+  "id": "61",
+  "title": "Release/Rollback Drill Automation",
+  "description": "Automate rollback drills and snapshot integrity.",
+  "status": "completed",
+  "owner": "platform",
+  "priority": "medium",
+  "created_at": "2026-02-21",
+  "labels": ["release", "reliability"]
+}

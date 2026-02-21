@@ -8,6 +8,69 @@ import type { CommandExecutionResult } from '../../src/types/release.js';
 
 // ─── Workspace Fixtures ───────────────────────────────────────────────────────
 
+function buildValidTwinclawConfig() {
+  return {
+    runtime: {
+      apiSecret: 'test-secret',
+      apiPort: 3100,
+      secretVaultRequired: [],
+    },
+    models: {
+      modalApiKey: '',
+      openRouterApiKey: 'openrouter-test-key',
+      geminiApiKey: '',
+    },
+    messaging: {
+      telegram: {
+        enabled: false,
+        botToken: '',
+        userId: null,
+      },
+      whatsapp: {
+        enabled: false,
+        phoneNumber: '',
+      },
+      voice: {
+        groqApiKey: '',
+      },
+      inbound: {
+        enabled: true,
+        debounceMs: 1500,
+      },
+      streaming: {
+        blockStreamingDefault: true,
+        blockStreamingBreak: 'paragraph',
+        blockStreamingMinChars: 50,
+        blockStreamingMaxChars: 800,
+        blockStreamingCoalesce: true,
+        humanDelayMs: 800,
+      },
+    },
+    storage: {
+      embeddingDim: 1536,
+    },
+    integration: {
+      embeddingProvider: 'openai',
+      embeddingApiKey: '',
+      openaiApiKey: '',
+      embeddingApiUrl: 'https://api.openai.com/v1/embeddings',
+      embeddingModel: 'text-embedding-3-small',
+      ollamaBaseUrl: 'http://localhost:11434',
+      ollamaEmbeddingModel: 'mxbai-embed-large',
+    },
+    tools: {
+      allow: [],
+      deny: [],
+    },
+  };
+}
+
+function extractFlagValue(command: string, flag: string): string | null {
+  const pattern = new RegExp(`${flag}\\s+(?:"([^"]+)"|'([^']+)'|(\\S+))`);
+  const match = command.match(pattern);
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
+}
+
 async function createWorkspace(): Promise<string> {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'twinclaw-mvpgate-'));
 
@@ -40,6 +103,7 @@ async function createWorkspace(): Promise<string> {
   // Required files
   await writeFile(path.join(workspace, 'mcp-servers.json'), '{}', 'utf8');
   await writeFile(path.join(workspace, 'twinclaw.default.json'), '{}\n', 'utf8');
+  await writeFile(path.join(workspace, 'twinclaw.json'), JSON.stringify(buildValidTwinclawConfig()), 'utf8');
   await writeFile(
     path.join(workspace, 'gui', 'package.json'),
     JSON.stringify({ name: 'gui-test' }),
@@ -60,7 +124,20 @@ async function createWorkspace(): Promise<string> {
 // ─── Mock Factories ───────────────────────────────────────────────────────────
 
 function passingRunner(): (command: string, _cwd: string) => Promise<CommandExecutionResult> {
-  return async () => ({ ok: true, exitCode: 0, output: '', durationMs: 5 });
+  return async (command: string) => {
+    if (command.includes('onboard --non-interactive')) {
+      const configPath = extractFlagValue(command, '--config');
+      if (configPath) {
+        await mkdir(path.dirname(configPath), { recursive: true });
+        await writeFile(configPath, JSON.stringify(buildValidTwinclawConfig()), 'utf8');
+      }
+      return { ok: true, exitCode: 0, output: 'Onboarding completed.', durationMs: 5 };
+    }
+    if (command.includes('secret doctor')) {
+      return { ok: true, exitCode: 0, output: 'Secret vault status: ok', durationMs: 5 };
+    }
+    return { ok: true, exitCode: 0, output: '', durationMs: 5 };
+  };
 }
 
 function failingRunner(
@@ -80,6 +157,22 @@ function healthyProbe(): () => Promise<{ ok: boolean; detail: string }> {
 
 function unhealthyProbe(): () => Promise<{ ok: boolean; detail: string }> {
   return async () => ({ ok: false, detail: 'Health endpoint unreachable' });
+}
+
+function degradedVaultRunner(): (command: string, _cwd: string) => Promise<CommandExecutionResult> {
+  return async (command: string) => {
+    if (command.includes('secret doctor')) {
+      return { ok: true, exitCode: 0, output: 'Secret vault status: degraded', durationMs: 5 };
+    }
+    if (command.includes('onboard --non-interactive')) {
+      const configPath = extractFlagValue(command, '--config');
+      if (configPath) {
+        await mkdir(path.dirname(configPath), { recursive: true });
+        await writeFile(configPath, JSON.stringify(buildValidTwinclawConfig()), 'utf8');
+      }
+    }
+    return { ok: true, exitCode: 0, output: '', durationMs: 5 };
+  };
 }
 
 // ─── Test Suite ───────────────────────────────────────────────────────────────
@@ -162,7 +255,7 @@ describe('MvpGateService', () => {
     expect(report.failedHardGates.some((c) => c.id === 'api-health')).toBe(true);
   });
 
-  it('skips api-health when no healthUrl is provided', async () => {
+  it('skips api-health when skipHealth is true', async () => {
     const workspace = await createWorkspace();
     workspaces.push(workspace);
 
@@ -172,7 +265,7 @@ describe('MvpGateService', () => {
       healthProbe: unhealthyProbe(),
     });
 
-    const report = await service.runGate(); // no healthUrl
+    const report = await service.runGate({ skipHealth: true });
 
     // api-health should not appear in checks at all
     expect(report.checks.some((c) => c.id === 'api-health')).toBe(false);
@@ -220,6 +313,59 @@ describe('MvpGateService', () => {
     expect(report.verdict).toBe('no-go');
     const onboardCheck = report.checks.find((c) => c.id === 'cli-onboard');
     expect(onboardCheck?.status).toBe('failed');
+  });
+
+  it('fails config-schema hard gate when twinclaw.json is missing', async () => {
+    const workspace = await createWorkspace();
+    workspaces.push(workspace);
+
+    await rm(path.join(workspace, 'twinclaw.json'), { force: true });
+
+    const service = new MvpGateService({
+      workspaceRoot: workspace,
+      commandRunner: passingRunner(),
+      healthProbe: healthyProbe(),
+    });
+
+    const report = await service.runGate({ skipHealth: true });
+
+    expect(report.verdict).toBe('no-go');
+    const configCheck = report.checks.find((c) => c.id === 'config-schema');
+    expect(configCheck?.status).toBe('failed');
+  });
+
+  it('fails cli-onboard hard gate when onboarding smoke command fails', async () => {
+    const workspace = await createWorkspace();
+    workspaces.push(workspace);
+
+    const service = new MvpGateService({
+      workspaceRoot: workspace,
+      commandRunner: failingRunner(['onboard --non-interactive']),
+      healthProbe: healthyProbe(),
+    });
+
+    const report = await service.runGate({ skipHealth: true });
+
+    expect(report.verdict).toBe('no-go');
+    const onboardCheck = report.checks.find((c) => c.id === 'cli-onboard');
+    expect(onboardCheck?.status).toBe('failed');
+  });
+
+  it('fails vault-health hard gate when secret doctor reports degraded', async () => {
+    const workspace = await createWorkspace();
+    workspaces.push(workspace);
+
+    const service = new MvpGateService({
+      workspaceRoot: workspace,
+      commandRunner: degradedVaultRunner(),
+      healthProbe: healthyProbe(),
+    });
+
+    const report = await service.runGate({ skipHealth: true });
+
+    expect(report.verdict).toBe('no-go');
+    const vaultCheck = report.checks.find((c) => c.id === 'vault-health');
+    expect(vaultCheck?.status).toBe('failed');
   });
 
   it('returns advisory-only verdict when only advisory checks fail', async () => {

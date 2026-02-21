@@ -1,10 +1,17 @@
-import type { Skill, SkillSource } from '../skills/types.js';
+import type { Skill, SkillGroup, SkillSource } from '../skills/types.js';
 import { logThought } from '../utils/logger.js';
 
 /** Filter criteria for querying skills from the registry. */
 export interface SkillFilter {
     source?: SkillSource;
     serverId?: string;
+    group?: SkillGroup;
+}
+
+export interface SkillRegistrySummary {
+    builtin: number;
+    mcp: number;
+    groups: Record<string, number>;
 }
 
 /**
@@ -24,13 +31,42 @@ export interface SkillFilter {
  */
 export class SkillRegistry {
     readonly #skills: Map<string, Skill> = new Map();
+    readonly #aliases: Map<string, string> = new Map();
+
+    #removeAliasesForCanonical(canonicalName: string): void {
+        for (const [alias, mappedCanonical] of this.#aliases.entries()) {
+            if (mappedCanonical === canonicalName) {
+                this.#aliases.delete(alias);
+            }
+        }
+    }
+
+    #resolveCanonicalName(name: string): string {
+        return this.#aliases.get(name) ?? name;
+    }
 
     /** Register a single skill. Overwrites if a skill with the same name already exists. */
     register(skill: Skill): void {
         const source = skill.source ?? 'builtin';
-        this.#skills.set(skill.name, { ...skill, source });
+        const canonicalName = skill.name;
+        this.#removeAliasesForCanonical(canonicalName);
+
+        const normalized: Skill = { ...skill, source };
+        this.#skills.set(canonicalName, normalized);
+
+        for (const alias of skill.aliases ?? []) {
+            const normalizedAlias = alias.trim();
+            if (!normalizedAlias || normalizedAlias === canonicalName) {
+                continue;
+            }
+            if (this.#skills.has(normalizedAlias)) {
+                continue;
+            }
+            this.#aliases.set(normalizedAlias, canonicalName);
+        }
+
         void logThought(
-            `[SkillRegistry] Registered skill '${skill.name}' (source: ${source}).`,
+            `[SkillRegistry] Registered skill '${skill.name}' (source: ${source}, aliases: ${skill.aliases?.length ?? 0}).`,
         );
     }
 
@@ -43,29 +79,36 @@ export class SkillRegistry {
 
     /** Unregister a skill by name. Returns true if the skill was found and removed. */
     unregister(name: string): boolean {
-        return this.#skills.delete(name);
+        const canonicalName = this.#resolveCanonicalName(name);
+        const removed = this.#skills.delete(canonicalName);
+        if (removed) {
+            this.#removeAliasesForCanonical(canonicalName);
+        }
+        return removed;
     }
 
     /** Unregister all skills from a specific MCP server. */
     unregisterByServer(serverId: string): number {
-        let count = 0;
-        for (const [name, skill] of this.#skills) {
+        const namesToRemove: string[] = [];
+        for (const [name, skill] of this.#skills.entries()) {
             if (skill.serverId === serverId) {
-                this.#skills.delete(name);
-                count++;
+                namesToRemove.push(name);
             }
         }
-        return count;
+        for (const name of namesToRemove) {
+            this.unregister(name);
+        }
+        return namesToRemove.length;
     }
 
     /** Look up a skill by its unique name. */
     get(name: string): Skill | undefined {
-        return this.#skills.get(name);
+        return this.#skills.get(this.#resolveCanonicalName(name));
     }
 
     /** Check if a skill with the given name exists in the registry. */
     has(name: string): boolean {
-        return this.#skills.has(name);
+        return this.get(name) !== undefined;
     }
 
     /** List all registered skills, optionally filtered by source or server. */
@@ -77,6 +120,7 @@ export class SkillRegistry {
         return all.filter((skill) => {
             if (filter.source && skill.source !== filter.source) return false;
             if (filter.serverId && skill.serverId !== filter.serverId) return false;
+            if (filter.group && skill.group !== filter.group) return false;
             return true;
         });
     }
@@ -87,11 +131,20 @@ export class SkillRegistry {
     }
 
     /** Return a summary of skills grouped by source. */
-    summary(): Record<string, number> {
-        const counts: Record<string, number> = { builtin: 0, mcp: 0 };
+    summary(): SkillRegistrySummary {
+        const counts: SkillRegistrySummary = {
+            builtin: 0,
+            mcp: 0,
+            groups: {},
+        };
         for (const skill of this.#skills.values()) {
             const source = skill.source ?? 'builtin';
-            counts[source] = (counts[source] ?? 0) + 1;
+            if (source === 'builtin' || source === 'mcp') {
+                counts[source] += 1;
+            }
+            if (skill.group) {
+                counts.groups[skill.group] = (counts.groups[skill.group] ?? 0) + 1;
+            }
         }
         return counts;
     }

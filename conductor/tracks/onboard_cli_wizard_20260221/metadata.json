@@ -1,8 +1,0 @@
-{
-  "track_id": "onboard_cli_wizard_20260221",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-02-21T08:35:00Z",
-  "updated_at": "2026-02-21T08:35:00Z",
-  "description": "Build the interactive `twinclaw onboard` wizard to provision local configuration without manual env editing."
-}

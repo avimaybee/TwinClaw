@@ -1,0 +1,8 @@
+{
+    "track_id":  "channels_login_doctor_20260221",
+    "type":  "feature",
+    "status":  "completed",
+    "created_at":  "2026-02-21T08:35:00Z",
+    "updated_at":  "2026-02-21T14:15:00Z",
+    "description":  "Introduce channel login flows and doctor validation for wizard-generated local configuration."
+}

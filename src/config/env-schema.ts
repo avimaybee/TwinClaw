@@ -91,6 +91,26 @@ export const CONFIG_SCHEMA: readonly ConfigKeySpec[] = [
     description: 'Listening port for the HTTP control plane API (default: 3100).',
     remediation: 'Set API_PORT to change the control plane port, e.g. API_PORT=8080.',
   },
+  {
+    key: 'TOOLS_ALLOW',
+    type: 'env',
+    class: 'optional',
+    scope: 'runtime',
+    description:
+      'Comma-separated allow-list selectors for tool exposure (exact tool names, group:*, source:*, mcp:<serverId>).',
+    remediation:
+      'Set TOOLS_ALLOW to restrict model-visible tools, e.g. TOOLS_ALLOW=group:fs,fs.apply_patch.',
+  },
+  {
+    key: 'TOOLS_DENY',
+    type: 'env',
+    class: 'optional',
+    scope: 'runtime',
+    description:
+      'Comma-separated deny-list selectors for tool exposure, applied after TOOLS_ALLOW.',
+    remediation:
+      'Set TOOLS_DENY to hide risky tools, e.g. TOOLS_DENY=runtime.exec,group:runtime.',
+  },
 
   // ── Model Routing ────────────────────────────────────────────────────────────
   {

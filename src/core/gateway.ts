@@ -14,7 +14,7 @@ import type {
 } from '../types/orchestration.js';
 import { assembleContext } from './context-assembly.js';
 import { LaneExecutor } from './lane-executor.js';
-import type { Message, Tool } from './types.js';
+import type { Message, Tool, ToolCall } from './types.js';
 import { SkillRegistry } from '../services/skill-registry.js';
 import type { Skill } from '../skills/types.js';
 import { PolicyEngine } from '../services/policy-engine.js';
@@ -28,6 +28,7 @@ import type {
 } from '../types/context-budget.js';
 
 const DEFAULT_MAX_TOOL_ROUNDS = 6;
+const DEFAULT_IDENTICAL_TOOL_CALL_LIMIT = 3;
 const DEFAULT_DELEGATION_MIN_SCORE = 2;
 const DELEGATION_KEYWORDS = [
   'complex',
@@ -78,14 +79,55 @@ function skillToTool(skill: Skill): Tool {
   };
 }
 
+interface ToolPolicyConfig {
+  allow: string[];
+  deny: string[];
+}
+
+function normalizeToolSelectors(values: string[] | undefined): string[] {
+  if (!values || values.length === 0) {
+    return [];
+  }
+
+  return values
+    .map((value) => value.trim().toLowerCase())
+    .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+}
+
+function matchesToolSelector(skill: Skill, selector: string): boolean {
+  const normalizedName = skill.name.toLowerCase();
+  if (selector === normalizedName) {
+    return true;
+  }
+
+  if (selector.startsWith('group:')) {
+    return skill.group?.toLowerCase() === selector;
+  }
+
+  if (selector.startsWith('source:')) {
+    return `${skill.source ?? 'builtin'}`.toLowerCase() === selector.slice('source:'.length);
+  }
+
+  if (selector.startsWith('mcp:')) {
+    return (skill.serverId ?? '').toLowerCase() === selector.slice('mcp:'.length);
+  }
+
+  return false;
+}
+
 export interface GatewayOptions {
   maxToolRounds?: number;
+  identicalToolCallLimit?: number;
   router?: ModelRouter;
   orchestration?: OrchestrationService;
   policyEngine?: PolicyEngine;
   enableDelegation?: boolean;
   delegationMinScore?: number;
   contextBudgetConfig?: Partial<ContextBudgetConfig>;
+  toolPolicy?: {
+    allow?: string[];
+    deny?: string[];
+  };
 }
 
 export class Gateway implements GatewayHandler {
@@ -96,9 +138,11 @@ export class Gateway implements GatewayHandler {
   readonly #registry: SkillRegistry;
   #tools: Tool[] = [];
   readonly #maxToolRounds: number;
+  readonly #identicalToolCallLimit: number;
   readonly #enableDelegation: boolean;
   readonly #delegationMinScore: number;
   readonly #contextLifecycle: ContextLifecycleOrchestrator;
+  readonly #toolPolicy: ToolPolicyConfig;
   readonly #degradationCounts: Map<string, number> = new Map();
 
   constructor(registry: SkillRegistry, options: GatewayOptions = {}) {
@@ -111,21 +155,55 @@ export class Gateway implements GatewayHandler {
       Number.isFinite(options.maxToolRounds) && (options.maxToolRounds ?? 0) > 0
         ? Number(options.maxToolRounds)
         : DEFAULT_MAX_TOOL_ROUNDS;
+    this.#identicalToolCallLimit =
+      Number.isFinite(options.identicalToolCallLimit) && (options.identicalToolCallLimit ?? 0) > 1
+        ? Math.floor(Number(options.identicalToolCallLimit))
+        : DEFAULT_IDENTICAL_TOOL_CALL_LIMIT;
     this.#enableDelegation = options.enableDelegation ?? true;
     this.#delegationMinScore = Math.max(
       1,
       Number(options.delegationMinScore ?? DEFAULT_DELEGATION_MIN_SCORE),
     );
     this.#contextLifecycle = new ContextLifecycleOrchestrator(options.contextBudgetConfig);
+    this.#toolPolicy = {
+      allow: normalizeToolSelectors(options.toolPolicy?.allow),
+      deny: normalizeToolSelectors(options.toolPolicy?.deny),
+    };
 
     this.refreshTools();
+  }
+
+  #filterSkillsByToolPolicy(skills: Skill[]): Skill[] {
+    if (this.#toolPolicy.allow.length === 0 && this.#toolPolicy.deny.length === 0) {
+      return skills;
+    }
+
+    const allowFiltered = this.#toolPolicy.allow.length > 0
+      ? skills.filter((skill) =>
+        this.#toolPolicy.allow.some((selector) => matchesToolSelector(skill, selector)))
+      : skills;
+
+    if (this.#toolPolicy.deny.length === 0) {
+      return allowFiltered;
+    }
+
+    return allowFiltered.filter(
+      (skill) => !this.#toolPolicy.deny.some((selector) => matchesToolSelector(skill, selector)),
+    );
+  }
+
+  #buildToolCallSignature(toolCalls: ToolCall[]): string {
+    return toolCalls
+      .map((toolCall) => `${toolCall.function.name}:${toolCall.function.arguments?.trim() ?? ''}`)
+      .join('|');
   }
 
   /** Sync the gateway's tool definitions with the current state of the skill registry. */
   refreshTools(): void {
     const skills = this.#registry.list();
-    this.#tools = skills.map(skillToTool);
-    this.#laneExecutor.syncFromRegistry(this.#registry);
+    const filteredSkills = this.#filterSkillsByToolPolicy(skills);
+    this.#tools = filteredSkills.map(skillToTool);
+    this.#laneExecutor.syncSkills(filteredSkills);
   }
 
   getContextDegradationSnapshot(limit = 8): {
@@ -218,6 +296,8 @@ export class Gateway implements GatewayHandler {
   async #runConversationLoop(sessionId: string, messages: Message[]): Promise<string> {
     // Refresh tools at the start of each loop to catch newly connected MCP servers
     this.refreshTools();
+    let previousToolCallSignature: string | null = null;
+    let repeatedToolCallCount = 0;
 
     for (let round = 0; round < this.#maxToolRounds; round++) {
       const assistantMessage = (await this.#router.createChatCompletion(
@@ -241,6 +321,22 @@ export class Gateway implements GatewayHandler {
 
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
         return assistantContent || 'Done.';
+      }
+
+      const toolSignature = this.#buildToolCallSignature(assistantMessage.tool_calls);
+      if (toolSignature === previousToolCallSignature) {
+        repeatedToolCallCount += 1;
+      } else {
+        previousToolCallSignature = toolSignature;
+        repeatedToolCallCount = 1;
+      }
+
+      if (repeatedToolCallCount >= this.#identicalToolCallLimit) {
+        const diagnostic =
+          `Tool-call loop guard triggered after ${repeatedToolCallCount} repeated identical ` +
+          `tool batches. Last signature: ${toolSignature}`;
+        await this.#persistTurn(sessionId, 'tool', diagnostic);
+        return `${diagnostic}. Stopping execution to prevent an infinite loop.`;
       }
 
       const toolResults = await this.#laneExecutor.executeToolCalls(assistantMessage, sessionId, this.#policyEngine);

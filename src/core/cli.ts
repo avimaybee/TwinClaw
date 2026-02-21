@@ -7,10 +7,13 @@ Usage: node src/index.ts [command] [options]
 
 Commands:
   doctor              Run diagnostics and validate prerequisites
+  onboard             Run the interactive onboarding wizard (twinclaw.json)
   setup               Run the guided configuration wizard
   pairing             Manage DM pairing approvals (list/approve)
   secret <subcommand> Manage secrets in the secure vault
   channels <subcmd>   Manage messaging channels (e.g. login)
+  gateway <subcmd>    Manage the TwinClaw background service daemon
+  logs [--follow]     Stream daily structured memory logs from the daemon
   --onboard           Run the interactive AI persona-building session
 
 Options:
@@ -20,6 +23,7 @@ Options:
 Examples:
   node src/index.ts doctor
   node src/index.ts doctor --json
+  node src/index.ts onboard
   node src/index.ts setup
   node src/index.ts pairing list telegram
   node src/index.ts pairing approve telegram ABCD1234
@@ -28,6 +32,12 @@ Examples:
   node src/index.ts secret rotate API_SECRET newsecret
   node src/index.ts secret revoke API_SECRET
   node src/index.ts secret doctor
+  node src/index.ts gateway install
+  node src/index.ts gateway status
+  node src/index.ts gateway status --deep
+  node src/index.ts gateway restart
+  node src/index.ts gateway tailscale
+  node src/index.ts logs --follow
 `.trim();
 
 // ── Command handlers ─────────────────────────────────────────────────────────
@@ -90,8 +100,11 @@ export function handleUnknownCommand(argv: string[]): boolean {
     'pairing',
     'secret',
     'doctor',
+    'onboard',
     'setup',
     'channels',
+    'gateway',
+    'logs',
     '--onboard',
     '--help',
     '-h',

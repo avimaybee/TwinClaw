@@ -17,10 +17,10 @@ export interface ToolCallResponse {
 export interface Tool {
     name: string;
     description: string;
-    parameters: Record<string, any>;
+    parameters: Record<string, unknown>;
     mcpScope?: string;
     serverId?: string;
-    execute: (args: Record<string, any>) => Promise<any>;
+    execute: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
 export interface Message {

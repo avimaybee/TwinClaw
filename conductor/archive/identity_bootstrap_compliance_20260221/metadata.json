@@ -1,0 +1,10 @@
+{
+  "id": "63",
+  "title": "Identity Bootstrap Compliance",
+  "description": "Enforce creation of soul/identity/memory files.",
+  "status": "completed",
+  "owner": "platform",
+  "priority": "medium",
+  "created_at": "2026-02-21",
+  "labels": ["onboarding", "persona"]
+}

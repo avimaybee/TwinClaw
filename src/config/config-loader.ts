@@ -1,5 +1,5 @@
 export {
-    TwinClawConfig,
+    type TwinClawConfig,
     DEFAULT_CONFIG,
     getConfigPath,
     ensureConfigDir,

@@ -1,0 +1,10 @@
+{
+  "id": "60",
+  "title": "API Health as Default Hard Gate",
+  "description": "Make health checks mandatory for startup and release.",
+  "status": "completed",
+  "owner": "platform",
+  "priority": "high",
+  "created_at": "2026-02-21",
+  "labels": ["health", "runtime"]
+}

@@ -7,10 +7,15 @@ export interface SkillExecutionResult {
 
 /** Source origin of a skill — local builtin or MCP-backed. */
 export type SkillSource = 'builtin' | 'mcp';
+export type SkillGroup = `group:${string}`;
 
 export interface Skill {
   name: string;
   description: string;
+  /** Native tool grouping (for example: group:fs, group:runtime). */
+  group?: SkillGroup;
+  /** Optional legacy aliases that should resolve to this canonical skill. */
+  aliases?: string[];
   /** JSON Schema describing the tool's input parameters. */
   parameters?: JsonSchema;
   /** Where this skill originates from. @default 'builtin' */

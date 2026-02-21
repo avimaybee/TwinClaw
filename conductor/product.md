@@ -28,7 +28,7 @@ TwinClaw is a zero-cost, local-first autonomous agentic service that empowers us
 - **MCP Skill Registry:** Extensible tool catalog supporting both local builtins and Model Context Protocol (MCP) backed external integrations (GitHub, web search, databases, browser automation, and more).
 
 ## Design Philosophy
-- **Ease of Use:** A primary GUI ensures that installation and setup are accessible to everyone, regardless of technical background.
+- **Ease of Use:** A primary GUI and interactive CLI onboarding wizard ensure that installation and setup are accessible to everyone, regardless of technical background.
 - **Modular & Decoupled:** Components (Models, Skills, Interfaces) are treated as swappable "LEGO blocks" to support a growing library of features.
 - **Transparent State:** The agent's "soul," identity, and memory are persisted in human-readable Markdown files for easy auditing and customization.
 - **TUI Core:** Maintains a high-performance terminal interface for developers and low-level system monitoring.

@@ -5,10 +5,11 @@ interface ParsedArgs {
   healthUrl?: string;
   reportDir?: string;
   skipHealth: boolean;
+  ci: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const parsed: ParsedArgs = { skipHealth: false };
+  const parsed: ParsedArgs = { skipHealth: false, ci: false };
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -28,6 +29,10 @@ function parseArgs(argv: string[]): ParsedArgs {
       parsed.skipHealth = true;
       continue;
     }
+    if (token === '--ci') {
+      parsed.ci = true;
+      continue;
+    }
   }
 
   return parsed;
@@ -37,12 +42,13 @@ function printUsage(): void {
   console.error(
     [
       'Usage:',
-      '  tsx src/release/mvp-gate-cli.ts [--health-url <url>] [--report-dir <path>] [--skip-health]',
+      '  tsx src/release/mvp-gate-cli.ts [--health-url <url>] [--report-dir <path>] [--skip-health] [--ci]',
       '',
       'Flags:',
-      '  --health-url <url>  Activate the api-health hard gate against this URL',
+      '  --health-url <url>  Override the health endpoint URL (default: http://localhost:18789/health)',
       '  --report-dir <path> Override the report output directory',
-      '  --skip-health       Skip the api-health check entirely (default when --health-url is omitted)',
+      '  --skip-health       Skip the api-health check entirely',
+      '  --ci                CI mode; output remains deterministic for workflow parsing',
       '',
       'Exit codes:',
       '  0  go (all hard gates passed, no advisory failures)',
@@ -116,7 +122,8 @@ async function main(): Promise<void> {
   const service = new MvpGateService({ reportDir: args.reportDir });
 
   const report = await service.runGate({
-    healthUrl: args.skipHealth ? undefined : args.healthUrl,
+    healthUrl: args.healthUrl,
+    skipHealth: args.skipHealth,
   });
 
   // Machine-readable JSON → stdout

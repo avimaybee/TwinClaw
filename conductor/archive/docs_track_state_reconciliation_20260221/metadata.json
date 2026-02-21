@@ -1,0 +1,10 @@
+{
+  "id": "64",
+  "title": "Docs & Track-State Reconciliation",
+  "description": "Align documentation and conductor states.",
+  "status": "completed",
+  "owner": "platform",
+  "priority": "medium",
+  "created_at": "2026-02-21",
+  "labels": ["documentation", "cleanup"]
+}

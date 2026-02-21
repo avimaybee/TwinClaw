@@ -1,0 +1,8 @@
+{
+  "track_id": "gateway_supervision_remote_access_20260221",
+  "type": "feature",
+  "status": "completed",
+  "created_at": "2026-02-21T09:37:18Z",
+  "updated_at": "2026-02-21T09:37:18Z",
+  "description": "Implement gateway supervision lifecycle commands, remote access integration, and liveness/readiness/log streaming operations for 24/7 TwinClaw runtime control."
+}

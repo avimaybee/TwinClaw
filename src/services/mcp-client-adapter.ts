@@ -255,6 +255,7 @@ export class McpClientAdapter {
         return {
             name,
             description: `[MCP:${serverId}] ${description}`,
+            group: 'group:mcp',
             parameters: (inputSchema as JsonSchema) ?? undefined,
             source: 'mcp',
             serverId,

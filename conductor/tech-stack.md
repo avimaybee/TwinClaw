@@ -5,6 +5,7 @@
 - **Containerization:** Docker & Docker Compose for isolated, persistent environments.
 - **Deployment:** Railway (Cloud Hosting) for 24/7 proactive "heartbeat" operations.
 - **Local Workspace:** AntiGravity Workspace for multi-agent workflow orchestration.
+- **Configuration:** Unified `twinclaw.json` (canonical JSON foundation) with encrypted SQLite Secret Vault.
 
 ## AI & Model Layer
 - **LLM Routing:** OpenRouter with automated failover and rate-limit handling.

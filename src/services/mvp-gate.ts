@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CommandRunner, HealthProbe } from '../types/release.js';
 import type {
@@ -12,6 +12,7 @@ import type {
   TriageEntry,
   TriageSeverity,
 } from '../types/mvp-gate.js';
+import { validateTwinclawConfigSchema } from '../release/twinclaw-config-schema.js';
 
 // ─── Internal Types ───────────────────────────────────────────────────────────
 
@@ -42,6 +43,17 @@ const TRIAGE_OWNERSHIP: Record<
     ownerTrack: 'Track 41: Runtime Health, Doctor & Readiness Surfaces',
     nextAction: 'Start the runtime (`npm start`) and verify GET /health returns {"data":{"status":"ok"}}.',
   },
+  'config-schema': {
+    severity: 'blocker',
+    ownerTrack: 'Track 58: MVP Gate v2 (Deep Config/Vault Validation)',
+    nextAction:
+      'Fix twinclaw.json so it satisfies the required schema (runtime, models, messaging, storage, integration, tools).',
+  },
+  'vault-health': {
+    severity: 'blocker',
+    ownerTrack: 'Track 57: Secrets Hygiene & Credential Rotation Sweep',
+    nextAction: 'Run `node src/index.ts secret doctor` and resolve degraded vault diagnostics before release.',
+  },
   'interface-readiness': {
     severity: 'blocker',
     ownerTrack: 'Track 35: Build Contract Recovery & Compile Unblock',
@@ -54,8 +66,9 @@ const TRIAGE_OWNERSHIP: Record<
   },
   'cli-onboard': {
     severity: 'blocker',
-    ownerTrack: 'Track 23: CLI Hardening, User Onboarding & Doctor Diagnostics',
-    nextAction: 'Ensure `src/core/onboarding.ts` exists and implements the CLI wizard logic.',
+    ownerTrack: 'Track 58: MVP Gate v2 (Deep Config/Vault Validation)',
+    nextAction:
+      'Run a non-interactive onboarding smoke command and ensure it generates a schema-valid config file.',
   },
   'dist-artifact': {
     severity: 'advisory',
@@ -141,6 +154,10 @@ function compactTimestamp(now: () => Date): string {
   return now().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 }
 
+function quoteCommandArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
 async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await stat(targetPath);
@@ -172,12 +189,15 @@ function buildSummary(verdict: MvpGateVerdict, failedHardGates: MvpCheckResult[]
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
+const DEFAULT_HEALTH_URL = 'http://localhost:18789/health';
+
 export interface MvpGateServiceOptions {
   workspaceRoot?: string;
   reportDir?: string;
   commandRunner?: CommandRunner;
   healthProbe?: HealthProbe;
   now?: () => Date;
+  defaultHealthUrl?: string;
 }
 
 export class MvpGateService {
@@ -186,6 +206,7 @@ export class MvpGateService {
   readonly #commandRunner: CommandRunner;
   readonly #healthProbe: HealthProbe;
   readonly #now: () => Date;
+  readonly #defaultHealthUrl: string;
 
   constructor(options: MvpGateServiceOptions = {}) {
     this.#workspaceRoot = options.workspaceRoot ?? process.cwd();
@@ -194,6 +215,7 @@ export class MvpGateService {
     this.#commandRunner = options.commandRunner ?? defaultCommandRunner;
     this.#healthProbe = options.healthProbe ?? defaultHealthProbe;
     this.#now = options.now ?? (() => new Date());
+    this.#defaultHealthUrl = options.defaultHealthUrl ?? DEFAULT_HEALTH_URL;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -208,12 +230,15 @@ export class MvpGateService {
     checks.push(await this.#runBuildCheck());
     checks.push(await this.#runTestsCheck());
     checks.push(await this.#runNpmCommandsCheck());
-    checks.push(await this.#runCliOnboardCheck());
+    checks.push(await this.#runConfigSchemaCheck());
+    checks.push(await this.#runCliOnboardCheck(reportId));
+    checks.push(await this.#runVaultHealthCheck());
     checks.push(await this.#runInterfaceReadinessCheck());
 
-    // api-health is only a hard gate when a URL is explicitly provided
-    if (options.healthUrl) {
-      checks.push(await this.#runHealthCheck(options.healthUrl));
+    // api-health is a hard gate by default (uses default URL if not provided)
+    if (!options.skipHealth) {
+      const healthUrl = options.healthUrl ?? this.#defaultHealthUrl;
+      checks.push(await this.#runHealthCheck(healthUrl));
     }
 
     // Advisory checks
@@ -314,23 +339,200 @@ export class MvpGateService {
     }
   }
 
-  async #runCliOnboardCheck(): Promise<MvpCheckResult> {
+  async #runConfigSchemaCheck(): Promise<MvpCheckResult> {
+    const startedAt = nowIso(this.#now);
+    const started = Date.now();
+    const configPath = path.join(this.#workspaceRoot, 'twinclaw.json');
+
+    if (!(await pathExists(configPath))) {
+      return {
+        id: 'config-schema',
+        class: 'hard-gate',
+        status: 'failed',
+        detail: 'twinclaw.json is missing.',
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: Date.now() - started,
+      };
+    }
+
+    try {
+      const raw = await readFile(configPath, 'utf8');
+      const parsed = JSON.parse(raw) as unknown;
+      const validation = validateTwinclawConfigSchema(parsed);
+
+      return {
+        id: 'config-schema',
+        class: 'hard-gate',
+        status: validation.valid ? 'passed' : 'failed',
+        detail: validation.valid
+          ? 'twinclaw.json satisfies the required schema.'
+          : `twinclaw.json schema validation failed: ${validation.errors.slice(0, 4).join(' | ')}`,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: Date.now() - started,
+        artifacts: [configPath],
+      };
+    } catch (error: unknown) {
+      return {
+        id: 'config-schema',
+        class: 'hard-gate',
+        status: 'failed',
+        detail: `Unable to parse twinclaw.json: ${error instanceof Error ? error.message : String(error)}`,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: Date.now() - started,
+      };
+    }
+  }
+
+  async #runCliOnboardCheck(reportId: string): Promise<MvpCheckResult> {
     const startedAt = nowIso(this.#now);
     const started = Date.now();
     const onboardPath = path.join(this.#workspaceRoot, 'src', 'core', 'onboarding.ts');
     const exists = await pathExists(onboardPath);
+    if (!exists) {
+      return {
+        id: 'cli-onboard',
+        class: 'hard-gate',
+        status: 'failed',
+        detail: 'src/core/onboarding.ts is missing — the interactive wizard is required for MVP setup.',
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: Date.now() - started,
+      };
+    }
+
+    const smokeConfigPath = path.join(this.#reportDir, `${reportId}.onboard-smoke.json`);
+    const command = [
+      'npm run start -- onboard --non-interactive',
+      `--config ${quoteCommandArg(smokeConfigPath)}`,
+      '--api-secret mvp-gate-smoke-secret',
+      '--openrouter-api-key mvp-gate-smoke-model',
+      '--embedding-provider openai',
+      '--api-port 3100',
+    ].join(' ');
+
+    try {
+      const run = await this.#commandRunner(command, this.#workspaceRoot);
+      if (!run.ok) {
+        return {
+          id: 'cli-onboard',
+          class: 'hard-gate',
+          status: 'failed',
+          detail: `Onboarding smoke run failed (exit ${run.exitCode}). ${run.output.trim().split('\n').slice(-5).join('\n')}`,
+          command,
+          startedAt,
+          completedAt: nowIso(this.#now),
+          durationMs: run.durationMs,
+          artifacts: ['src/core/onboarding.ts'],
+        };
+      }
+
+      if (!(await pathExists(smokeConfigPath))) {
+        return {
+          id: 'cli-onboard',
+          class: 'hard-gate',
+          status: 'failed',
+          detail: 'Onboarding smoke run succeeded but did not produce a config artifact.',
+          command,
+          startedAt,
+          completedAt: nowIso(this.#now),
+          durationMs: run.durationMs,
+          artifacts: ['src/core/onboarding.ts'],
+        };
+      }
+
+      const generatedRaw = await readFile(smokeConfigPath, 'utf8');
+      const generatedConfig = JSON.parse(generatedRaw) as unknown;
+      const validation = validateTwinclawConfigSchema(generatedConfig);
+      if (!validation.valid) {
+        return {
+          id: 'cli-onboard',
+          class: 'hard-gate',
+          status: 'failed',
+          detail: `Onboarding output failed schema validation: ${validation.errors.slice(0, 4).join(' | ')}`,
+          command,
+          startedAt,
+          completedAt: nowIso(this.#now),
+          durationMs: run.durationMs,
+          artifacts: ['src/core/onboarding.ts', smokeConfigPath],
+        };
+      }
+
+      return {
+        id: 'cli-onboard',
+        class: 'hard-gate',
+        status: 'passed',
+        detail: 'Onboarding smoke run generated a schema-valid config artifact.',
+        command,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: run.durationMs,
+        artifacts: ['src/core/onboarding.ts'],
+      };
+    } catch (error: unknown) {
+      return {
+        id: 'cli-onboard',
+        class: 'hard-gate',
+        status: 'failed',
+        detail: `Onboarding smoke run crashed: ${error instanceof Error ? error.message : String(error)}`,
+        command,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: Date.now() - started,
+        artifacts: ['src/core/onboarding.ts'],
+      };
+    } finally {
+      await rm(smokeConfigPath, { force: true });
+    }
+  }
+
+  async #runVaultHealthCheck(): Promise<MvpCheckResult> {
+    const startedAt = nowIso(this.#now);
+    const started = Date.now();
+    const command = 'npm run start -- secret doctor';
+    const run = await this.#commandRunner(command, this.#workspaceRoot);
+
+    if (!run.ok) {
+      return {
+        id: 'vault-health',
+        class: 'hard-gate',
+        status: 'failed',
+        detail: `Secret vault doctor command failed (exit ${run.exitCode}). ${run.output.trim().split('\n').slice(-5).join('\n')}`,
+        command,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: run.durationMs,
+      };
+    }
+
+    const match = run.output.match(/Secret vault status:\s*(\w+)/i);
+    const status = match?.[1]?.toLowerCase();
+    if (status && status !== 'ok') {
+      return {
+        id: 'vault-health',
+        class: 'hard-gate',
+        status: 'failed',
+        detail: `Secret vault doctor reported non-healthy status: ${status}.`,
+        command,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        durationMs: run.durationMs,
+      };
+    }
 
     return {
-      id: 'cli-onboard',
+      id: 'vault-health',
       class: 'hard-gate',
-      status: exists ? 'passed' : 'failed',
-      detail: exists
-        ? 'CLI onboarding wizard module is present.'
-        : 'src/core/onboarding.ts is missing — the interactive wizard is required for MVP setup.',
+      status: 'passed',
+      detail: status === 'ok'
+        ? 'Secret vault doctor reported healthy status.'
+        : 'Secret vault doctor command succeeded.',
+      command,
       startedAt,
       completedAt: nowIso(this.#now),
-      durationMs: Date.now() - started,
-      artifacts: exists ? ['src/core/onboarding.ts'] : undefined,
+      durationMs: run.durationMs,
     };
   }
 

@@ -40,12 +40,20 @@ vi.mock('../../src/services/db.js', () => ({
 describe('SkillRegistry', () => {
   let registry: SkillRegistry;
 
-  const buildSkill = (name: string, source: Skill['source'] = 'builtin', serverId?: string): Skill => ({
+  const buildSkill = (
+    name: string,
+    source: Skill['source'] = 'builtin',
+    serverId?: string,
+    group?: Skill['group'],
+    aliases?: string[],
+  ): Skill => ({
     name,
     description: `Test skill: ${name}`,
     parameters: { type: 'object', properties: {} },
     source,
     serverId,
+    group,
+    aliases,
     execute: vi.fn().mockResolvedValue({ ok: true, output: 'done' }),
   });
 
@@ -122,14 +130,31 @@ describe('SkillRegistry', () => {
     expect(serverX[0]?.name).toBe('tool_a');
   });
 
+  it('resolves and reports skill aliases', () => {
+    registry.register(buildSkill('fs.read', 'builtin', undefined, 'group:fs', ['read_file']));
+    expect(registry.has('read_file')).toBe(true);
+    expect(registry.get('read_file')?.name).toBe('fs.read');
+  });
+
+  it('filters skills by tool group', () => {
+    registry.register(buildSkill('fs.read', 'builtin', undefined, 'group:fs'));
+    registry.register(buildSkill('runtime.exec', 'builtin', undefined, 'group:runtime'));
+
+    const fsSkills = registry.list({ group: 'group:fs' });
+    expect(fsSkills).toHaveLength(1);
+    expect(fsSkills[0]?.name).toBe('fs.read');
+  });
+
   it('returns correct summary grouped by source', () => {
-    registry.register(buildSkill('bt1', 'builtin'));
-    registry.register(buildSkill('bt2', 'builtin'));
-    registry.register(buildSkill('mcp1', 'mcp', 's1'));
+    registry.register(buildSkill('bt1', 'builtin', undefined, 'group:fs'));
+    registry.register(buildSkill('bt2', 'builtin', undefined, 'group:runtime'));
+    registry.register(buildSkill('mcp1', 'mcp', 's1', 'group:mcp'));
 
     const summary = registry.summary();
     expect(summary.builtin).toBe(2);
     expect(summary.mcp).toBe(1);
+    expect(summary.groups['group:fs']).toBe(1);
+    expect(summary.groups['group:runtime']).toBe(1);
   });
 });
 

@@ -1,5 +1,5 @@
 import { ReleasePipelineService } from '../services/release-pipeline.js';
-import type { PreflightResult, ReleaseManifest, RollbackResult } from '../types/release.js';
+import type { PreflightResult, ReleaseManifest, RollbackResult, DrillResult } from '../types/release.js';
 
 interface ParsedArgs {
   command: string | undefined;
@@ -57,11 +57,12 @@ function printUsage(): void {
       '  tsx src/release/cli.ts preflight [--health-url <url>]',
       '  tsx src/release/cli.ts prepare [--health-url <url>] [--release-id <id>] [--retention <n>]',
       '  tsx src/release/cli.ts rollback [--snapshot <id>] [--health-url <url>] [--restart-command "<cmd>"]',
+      '  tsx src/release/cli.ts drill [--snapshot <id>] [--health-url <url>]',
     ].join('\n'),
   );
 }
 
-function printJson(payload: PreflightResult | ReleaseManifest | RollbackResult): void {
+function printJson(payload: PreflightResult | ReleaseManifest | RollbackResult | DrillResult): void {
   console.log(JSON.stringify(payload, null, 2));
 }
 
@@ -101,6 +102,16 @@ async function main(): Promise<void> {
     });
     printJson(result);
     process.exitCode = result.status === 'failed' ? 1 : 0;
+    return;
+  }
+
+  if (parsed.command === 'drill') {
+    const result = await service.runDrill({
+      snapshotId: parsed.snapshotId,
+      healthUrl: parsed.healthUrl,
+    });
+    printJson(result);
+    process.exitCode = result.status === 'passed' ? 0 : 1;
     return;
   }
 

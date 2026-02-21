@@ -11,6 +11,8 @@ function skillToTool(skill: Skill): ToolWithMetadata {
         name: skill.name,
         description: skill.description,
         parameters: skill.parameters ?? {},
+        group: skill.group,
+        aliases: skill.aliases,
         mcpScope: skill.mcpScope,
         serverId: skill.serverId,
         adapter: skill.adapter,
@@ -22,6 +24,8 @@ function skillToTool(skill: Skill): ToolWithMetadata {
 }
 
 export interface ToolWithMetadata extends Tool {
+    group?: string;
+    aliases?: string[];
     mcpScope?: string;
     serverId?: string;
     adapter?: McpScopeAuditAdapter;
@@ -40,15 +44,30 @@ export class LaneExecutor {
         this.tools.set(tool.name, tool);
     }
 
+    private registerSkill(skill: Skill): void {
+        const converted = skillToTool(skill);
+        this.tools.set(converted.name, converted);
+        for (const alias of skill.aliases ?? []) {
+            const normalized = alias.trim();
+            if (!normalized || normalized === converted.name) {
+                continue;
+            }
+            this.tools.set(normalized, converted);
+        }
+    }
+
+    public syncSkills(skills: Skill[]): void {
+        this.tools.clear();
+        for (const skill of skills) {
+            this.registerSkill(skill);
+        }
+    }
+
     /**
-     * Pull all skills from a SkillRegistry and merge them into the tool map.
-     * Existing tools with the same name are overwritten.
+     * Pull all skills from a SkillRegistry and replace the executable tool map.
      */
     public syncFromRegistry(registry: SkillRegistry): void {
-        const skills = registry.list();
-        for (const skill of skills) {
-            this.tools.set(skill.name, skillToTool(skill));
-        }
+        this.syncSkills(registry.list());
     }
 
     private parseArguments(args: string): Record<string, unknown> {

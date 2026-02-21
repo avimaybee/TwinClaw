@@ -42,6 +42,17 @@ interface ModelAttemptResult {
   rateLimitCooldownMs?: number;
 }
 
+export interface StreamDelta {
+  type: 'text_delta' | 'tool_call_start' | 'tool_call_delta' | 'done' | 'error';
+  content?: string;
+  toolCallId?: string;
+  toolCallName?: string;
+  toolCallArguments?: string;
+  error?: string;
+}
+
+export type StreamCallback = (delta: StreamDelta) => void;
+
 export type ModelRoutingHealthSnapshot = ModelRoutingTelemetrySnapshot;
 
 export interface ModelRouterOptions {
@@ -403,6 +414,108 @@ export class ModelRouter {
     );
   }
 
+  public async createStreamingChatCompletion(
+    messages: Message[],
+    onDelta: StreamCallback,
+    tools?: Tool[],
+    context: ModelRequestContext = {},
+  ): Promise<Message> {
+    let lastError: Error | null = null;
+    let lastTriedModelId: string | null = null;
+    const sessionId = context.sessionId ?? DEFAULT_SESSION_ID;
+    const directive = this.budgetGovernor.getRoutingDirective(sessionId);
+    if (directive.pacingDelayMs > 0) {
+      await this.sleepFn(directive.pacingDelayMs);
+    }
+
+    const orderedModels = this.getOrderedModels(directive.profile);
+    const formattedTools = tools?.length
+      ? tools.map((tool) => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      }))
+      : undefined;
+    const estimatedRequestTokens = estimateRequestTokens(messages, formattedTools);
+
+    for (const config of orderedModels) {
+      const providerId = this.resolveProviderId(config);
+
+      if (directive.blockedProviders.includes(providerId) || directive.blockedModelIds.includes(config.id)) {
+        this.budgetGovernor.recordUsage({
+          sessionId,
+          modelId: config.id,
+          providerId,
+          profile: directive.profile,
+          stage: 'skipped',
+          requestTokens: estimatedRequestTokens,
+          responseTokens: 0,
+          latencyMs: 0,
+          error: `Skipped by runtime budget policy (${directive.severity}).`,
+        });
+        this.recordEvent(
+          'cooldown_skip',
+          config,
+          `Skipped by runtime budget policy (${directive.severity}).`,
+        );
+        continue;
+      }
+
+      const preflightCooldown = await this.resolveCooldownPreflight(config);
+      if (!preflightCooldown) {
+        lastTriedModelId = config.id;
+        continue;
+      }
+
+      const apiKey = this.getApiKey(config.apiKeyEnvName);
+      if (!apiKey) {
+        continue;
+      }
+
+      if (lastTriedModelId && lastTriedModelId !== config.id) {
+        this.metrics.failoverCount += 1;
+        this.recordEvent('failover', config, `Automatic fallback ${lastTriedModelId} -> ${config.id}.`);
+      }
+
+      const payload: Record<string, unknown> = {
+        model: config.model,
+        messages,
+        stream: true,
+      };
+      if (formattedTools) {
+        payload.tools = formattedTools;
+        payload.tool_choice = 'auto';
+      }
+
+      const streamAttempt = await this.executeStreamingAttempt({
+        config,
+        apiKey,
+        payload,
+        providerId,
+        sessionId,
+        directive,
+        estimatedRequestTokens,
+        onDelta,
+      });
+
+      if (streamAttempt.ok && streamAttempt.message) {
+        return streamAttempt.message;
+      }
+
+      if (streamAttempt.errorMessage) {
+        lastError = new Error(streamAttempt.errorMessage);
+      }
+      lastTriedModelId = config.id;
+    }
+
+    const errorMessage = `All configured models exhausted or failed. Last error: ${scrubSensitiveText(lastError?.message ?? 'unknown')}`;
+    onDelta({ type: 'error', error: errorMessage });
+    throw new Error(errorMessage);
+  }
+
   private getApiKey(envName: string): string {
     const key = getSecretVaultService().readSecret(envName);
     if (!key) {
@@ -639,6 +752,201 @@ export class ModelRouter {
         error: message,
       });
       this.recordEvent('failure', input.config, `Transport error on ${input.config.id}: ${message}`);
+      return { ok: false, errorMessage: message };
+    }
+  }
+
+  private async executeStreamingAttempt(input: {
+    config: ModelConfig;
+    apiKey: string;
+    payload: Record<string, unknown>;
+    providerId: string;
+    sessionId: string;
+    directive: RuntimeBudgetDirective;
+    estimatedRequestTokens: number;
+    onDelta: StreamCallback;
+  }): Promise<ModelAttemptResult> {
+    this.metrics.totalRequests += 1;
+    this.trackUsageAttempt(input.config.id);
+    this.recordEvent(
+      'attempt',
+      input.config,
+      `Attempting streaming ${input.config.model} (profile=${input.directive.profile}).`,
+    );
+
+    const startedAt = this.nowFn();
+    let responseContent = '';
+    const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+
+    try {
+      const response = await fetch(input.config.baseURL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${input.apiKey}`,
+          ...(input.config.id === 'fallback_1'
+            ? { 'HTTP-Referer': 'https://twinclaw.ai', 'X-Title': 'TwinClaw' }
+            : {}),
+        },
+        body: JSON.stringify(input.payload),
+      });
+
+      if (response.status === 429) {
+        const cooldownMs =
+          parseRetryAfterMs(response.headers.get('retry-after')) ?? this.defaultRateLimitCooldownMs;
+        this.#recordFailure(`429 Too Many Requests: ${input.config.model}`);
+        this.trackUsageFailure(input.config.id, `429 Too Many Requests: ${input.config.model}`, true);
+        this.setModelCooldown(input.config.id, cooldownMs, '429 rate-limit');
+        this.recordEvent(
+          'rate_limit',
+          input.config,
+          `Rate limit on ${input.config.id}; cooldown=${cooldownMs}ms.`,
+        );
+        return {
+          ok: false,
+          errorMessage: `429 Too Many Requests: ${input.config.model}`,
+          statusCode: 429,
+          rateLimitCooldownMs: cooldownMs,
+        };
+      }
+
+      if (!response.ok) {
+        const errText = scrubSensitiveText(await response.text());
+        const errorMessage = `HTTP ${response.status}: ${errText}`;
+        this.#recordFailure(errorMessage);
+        this.trackUsageFailure(input.config.id, errorMessage);
+        this.recordEvent('failure', input.config, `HTTP error (${response.status}) for ${input.config.id}.`);
+        return { ok: false, errorMessage, statusCode: response.status };
+      }
+
+      if (!response.body) {
+        return { ok: false, errorMessage: 'No response body for streaming request' };
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data) as {
+              choices?: Array<{
+                delta?: {
+                  content?: string;
+                  tool_calls?: Array<{
+                    id?: string;
+                    function?: { name?: string; arguments?: string };
+                  }>;
+                };
+              }>;
+            };
+
+            const delta = parsed.choices?.[0]?.delta;
+            if (delta?.content) {
+              responseContent += delta.content;
+              input.onDelta({ type: 'text_delta', content: delta.content });
+            }
+
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                if (tc.id) {
+                  toolCalls.push({ id: tc.id, name: '', arguments: '' });
+                  input.onDelta({ type: 'tool_call_start', toolCallId: tc.id });
+                }
+                if (tc.function?.name) {
+                  const lastTc = toolCalls[toolCalls.length - 1];
+                  if (lastTc) lastTc.name = tc.function.name;
+                  input.onDelta({
+                    type: 'tool_call_delta',
+                    toolCallId: lastTc?.id,
+                    toolCallName: tc.function.name,
+                  });
+                }
+                if (tc.function?.arguments) {
+                  const lastTc = toolCalls[toolCalls.length - 1];
+                  if (lastTc) lastTc.arguments += tc.function.arguments;
+                  input.onDelta({
+                    type: 'tool_call_delta',
+                    toolCallId: lastTc?.id,
+                    toolCallArguments: tc.function.arguments,
+                  });
+                }
+              }
+            }
+          } catch {
+            // Skip unparseable SSE lines
+          }
+        }
+      }
+
+      const latencyMs = this.nowFn() - startedAt;
+      this.metrics.consecutiveFailures = 0;
+      this.metrics.lastError = null;
+      this.currentModelId = input.config.id;
+      this.clearModelCooldown(input.config.id);
+      this.trackUsageSuccess(input.config.id);
+      this.budgetGovernor.recordUsage({
+        sessionId: input.sessionId,
+        modelId: input.config.id,
+        providerId: input.providerId,
+        profile: input.directive.profile,
+        stage: 'success',
+        requestTokens: input.estimatedRequestTokens,
+        responseTokens: estimateTokenCount(responseContent),
+        latencyMs,
+      });
+      this.recordEvent('success', input.config, `Streaming response succeeded for ${input.config.id}.`);
+
+      input.onDelta({ type: 'done' });
+
+      const message: Message = {
+        role: 'assistant',
+        content: responseContent || null,
+        tool_calls: toolCalls.length > 0
+          ? toolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: tc.name,
+              arguments: tc.arguments,
+            },
+          }))
+          : undefined,
+      };
+
+      return { ok: true, message };
+    } catch (error) {
+      const latencyMs = this.nowFn() - startedAt;
+      const message = scrubSensitiveText(error instanceof Error ? error.message : String(error));
+      this.#recordFailure(message);
+      this.trackUsageFailure(input.config.id, message);
+      this.budgetGovernor.recordUsage({
+        sessionId: input.sessionId,
+        modelId: input.config.id,
+        providerId: input.providerId,
+        profile: input.directive.profile,
+        stage: 'failure',
+        requestTokens: input.estimatedRequestTokens,
+        responseTokens: 0,
+        latencyMs,
+        error: message,
+      });
+      this.recordEvent('failure', input.config, `Streaming transport error on ${input.config.id}: ${message}`);
+      input.onDelta({ type: 'error', error: message });
       return { ok: false, errorMessage: message };
     }
   }

@@ -17,6 +17,7 @@ import type {
   ArtifactPointer,
   CommandExecutionResult,
   CommandRunner,
+  DrillResult,
   HealthProbe,
   HealthProbeResult,
   PreflightResult,
@@ -50,6 +51,10 @@ const CRITICAL_ASSETS: CriticalAsset[] = [
   { key: 'identity', relativePath: 'identity', kind: 'directory' },
   { key: 'mcp-config', relativePath: 'mcp-servers.json', kind: 'file' },
   { key: 'package-config', relativePath: 'package.json', kind: 'file' },
+  { key: 'twinclaw-config', relativePath: 'twinclaw.json', kind: 'file' },
+  { key: 'skill-catalog', relativePath: 'skill-packages.json', kind: 'file' },
+  { key: 'skill-lock', relativePath: 'skill-packages.lock.json', kind: 'file' },
+  { key: 'policy-profiles', relativePath: path.join('memory', 'policy-profiles.json'), kind: 'file' },
 ];
 
 function nowIso(now: () => Date): string {
@@ -187,6 +192,10 @@ export interface PrepareReleaseOptions extends PreflightOptions {
 export interface RollbackOptions extends PreflightOptions {
   snapshotId?: string;
   restartCommand?: string;
+}
+
+export interface DrillOptions extends PreflightOptions {
+  snapshotId?: string;
 }
 
 export interface ReleasePipelineOptions {
@@ -481,6 +490,133 @@ export class ReleasePipelineService {
     }
   }
 
+  async runDrill(options: DrillOptions = {}): Promise<DrillResult> {
+    const startedAt = nowIso(this.#now);
+    const drillId = `drill_${compactTimestamp(this.#now)}`;
+    const diagnostics: string[] = [];
+
+    diagnostics.push(`[Drill ${drillId}] Starting release rollback drill...`);
+
+    let preflightResult: PreflightResult | null = null;
+    let rollbackResult: RollbackResult | null = null;
+    const integrityCheckIssues: string[] = [];
+
+    try {
+      diagnostics.push('[Drill] Step 1: Running preflight checks...');
+      preflightResult = await this.runPreflight({ healthUrl: options.healthUrl });
+      if (!preflightResult.passed) {
+        diagnostics.push('[Drill] Preflight failed - this simulates a failed deploy scenario.');
+      } else {
+        diagnostics.push('[Drill] Preflight passed.');
+      }
+
+      diagnostics.push('[Drill] Step 2: Preparing a release candidate to capture snapshot...');
+      let manifest: ReleaseManifest | undefined;
+      try {
+        manifest = await this.prepareRelease({
+          healthUrl: options.healthUrl,
+          releaseId: `${drillId}_rc`,
+          retentionLimit: 10,
+        });
+        diagnostics.push(`[Drill] Release prepared with snapshot: ${manifest.snapshot?.snapshotId ?? 'none'}`);
+      } catch (prepError) {
+        const prepMessage = prepError instanceof Error ? prepError.message : String(prepError);
+        diagnostics.push(`[Drill] Release preparation skipped/failed: ${prepMessage}`);
+      }
+
+      let targetSnapshotId = options.snapshotId ?? manifest?.snapshot?.snapshotId;
+      if (!targetSnapshotId) {
+        const snapshot = await this.#resolveSnapshotForRollback(undefined);
+        targetSnapshotId = snapshot.snapshotId;
+        diagnostics.push(`[Drill] Using latest available snapshot: ${targetSnapshotId}`);
+      }
+
+      diagnostics.push('[Drill] Step 3: Running rollback to restore snapshot...');
+      try {
+        rollbackResult = await this.rollback({
+          snapshotId: targetSnapshotId,
+          healthUrl: options.healthUrl,
+        });
+        diagnostics.push(`[Drill] Rollback status: ${rollbackResult.status}`);
+      } catch (rbError) {
+        const rbMessage = rbError instanceof Error ? rbError.message : String(rbError);
+        diagnostics.push(`[Drill] Rollback error: ${rbMessage}`);
+      }
+
+      diagnostics.push('[Drill] Step 4: Verifying snapshot integrity...');
+      const snapshot = await this.#resolveSnapshotForRollback(targetSnapshotId);
+      for (const asset of snapshot.assets) {
+        if (asset.exists) {
+          const sourcePath = asset.sourcePath;
+          const snapshotPath = asset.snapshotPath;
+          const sourceExists = await pathExists(sourcePath);
+          const snapshotExists = await pathExists(snapshotPath);
+
+          if (!sourceExists) {
+            integrityCheckIssues.push(`Asset '${asset.relativePath}' missing in workspace after rollback.`);
+          } else if (!snapshotExists) {
+            integrityCheckIssues.push(`Asset '${asset.relativePath}' missing in snapshot.`);
+          } else {
+            diagnostics.push(`[Drill] Integrity check passed for: ${asset.relativePath}`);
+          }
+        }
+      }
+
+      const integrityPassed = integrityCheckIssues.length === 0;
+      diagnostics.push(`[Drill] Integrity check result: ${integrityPassed ? 'PASSED' : 'FAILED'}`);
+
+      const drillPassed =
+        rollbackResult !== null &&
+        (rollbackResult.status === 'restored' || rollbackResult.status === 'noop') &&
+        integrityPassed;
+
+      const result: DrillResult = {
+        status: drillPassed ? 'passed' : 'failed',
+        drillId,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        simulatedFailure: !preflightResult?.passed,
+        snapshotRestored: rollbackResult?.status === 'restored',
+        preflightResult,
+        rollbackResult,
+        integrityCheck: {
+          passed: integrityPassed,
+          issues: integrityCheckIssues,
+        },
+        diagnostics,
+      };
+
+      await this.#appendDrillAudit(result);
+      await logThought(`[ReleasePipeline] Drill ${drillId} completed with status: ${result.status}`);
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      diagnostics.push(`[Drill] Drill failed with error: ${errorMessage}`);
+
+      const result: DrillResult = {
+        status: 'failed',
+        drillId,
+        startedAt,
+        completedAt: nowIso(this.#now),
+        simulatedFailure: preflightResult !== null && !preflightResult.passed,
+        snapshotRestored: rollbackResult?.status === 'restored',
+        preflightResult,
+        rollbackResult,
+        integrityCheck: {
+          passed: false,
+          issues: [...integrityCheckIssues, errorMessage],
+        },
+        diagnostics,
+      };
+
+      await this.#appendDrillAudit(result);
+      await logThought(`[ReleasePipeline] Drill ${drillId} failed: ${errorMessage}`);
+
+      return result;
+    }
+  }
+
   async #runCommandCheck(
     id: Extract<ReleaseCheckId, 'build' | 'tests'>,
     command: string,
@@ -640,6 +776,12 @@ export class ReleasePipelineService {
 
   async #appendRollbackAudit(result: RollbackResult): Promise<void> {
     const auditPath = path.join(this.#releaseRootDir, 'rollback-audit.log');
+    await mkdir(path.dirname(auditPath), { recursive: true });
+    await appendFile(auditPath, `${JSON.stringify(result)}\n`, 'utf8');
+  }
+
+  async #appendDrillAudit(result: DrillResult): Promise<void> {
+    const auditPath = path.join(this.#releaseRootDir, 'drill-audit.log');
     await mkdir(path.dirname(auditPath), { recursive: true });
     await appendFile(auditPath, `${JSON.stringify(result)}\n`, 'utf8');
   }

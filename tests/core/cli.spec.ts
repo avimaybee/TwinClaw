@@ -53,9 +53,12 @@ describe('handleHelpCli', () => {
     handleHelpCli(['--help']);
     const output = consoleOutput.join('\n');
     expect(output).toContain('doctor');
+    expect(output).toContain('onboard');
     expect(output).toContain('setup');
     expect(output).toContain('pairing');
     expect(output).toContain('secret');
+    expect(output).toContain('gateway');
+    expect(output).toContain('logs');
   });
 });
 
@@ -126,9 +129,12 @@ describe('handleUnknownCommand', () => {
 
   it('returns false for known commands', () => {
     expect(handleUnknownCommand(['doctor'])).toBe(false);
+    expect(handleUnknownCommand(['onboard'])).toBe(false);
     expect(handleUnknownCommand(['setup'])).toBe(false);
     expect(handleUnknownCommand(['pairing', 'list', 'telegram'])).toBe(false);
     expect(handleUnknownCommand(['secret', 'list'])).toBe(false);
+    expect(handleUnknownCommand(['gateway', 'status'])).toBe(false);
+    expect(handleUnknownCommand(['logs', '--follow'])).toBe(false);
     expect(handleUnknownCommand(['--onboard'])).toBe(false);
     expect(handleUnknownCommand(['--help'])).toBe(false);
     expect(handleUnknownCommand(['-h'])).toBe(false);

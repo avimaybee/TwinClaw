@@ -1,8 +1,8 @@
 {
-  "track_id": "runtime_health_doctor_20260220",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-02-20T17:17:40Z",
-  "updated_at": "2026-02-20T17:17:40Z",
-  "description": "Deliver unified doctor diagnostics and runtime readiness health surfaces for CLI/API/GUI operators."
+    "track_id":  "runtime_health_doctor_20260220",
+    "type":  "feature",
+    "status":  "completed",
+    "created_at":  "2026-02-20T17:17:40Z",
+    "updated_at":  "2026-02-21T14:15:00Z",
+    "description":  "Deliver unified doctor diagnostics and runtime readiness health surfaces for CLI/API/GUI operators."
 }

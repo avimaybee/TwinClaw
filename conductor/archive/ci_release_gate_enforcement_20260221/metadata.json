@@ -1,0 +1,10 @@
+{
+  "id": "59",
+  "title": "CI Release Gate Enforcement",
+  "description": "Run the MVP Gate in CI to enforce release standards.",
+  "status": "completed",
+  "owner": "platform",
+  "priority": "high",
+  "created_at": "2026-02-21",
+  "labels": ["ci", "github-actions"]
+}

@@ -1,0 +1,3 @@
+checkConfigSchema > fails gracefully when config file is invalid JSON
+checkConfigSchema > passes when config file is valid JSON
+checkChannelAuth > passes when whatsapp auth directory exists (successful link)

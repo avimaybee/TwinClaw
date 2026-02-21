@@ -183,7 +183,7 @@ describe('Replay Harness Execution Runner', () => {
                         { role: 'assistant', content: null, tool_calls: [{ id: 'call_5', type: 'function', function: { name: 'list_files', arguments: '{}' } }] },
                         { role: 'assistant', content: null, tool_calls: [{ id: 'call_6', type: 'function', function: { name: 'list_files', arguments: '{}' } }] }
                     ],
-                    expectResponseContains: ['Stopped after 5 tool-execution rounds without a final text response']
+                    expectResponseContains: ['Tool-call loop guard triggered']
                 }
             ]
         };

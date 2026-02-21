@@ -8,6 +8,8 @@ export type MvpHardGateId =
   | 'build'
   | 'tests'
   | 'api-health'
+  | 'config-schema'
+  | 'vault-health'
   | 'interface-readiness'
   | 'npm-commands'
   | 'cli-onboard';
@@ -86,8 +88,11 @@ export interface MvpGateReport {
 
 export interface MvpGateOptions {
   /**
-   * URL of the health endpoint. If provided, the `api-health` hard gate is
-   * activated; if omitted the check is skipped.
+   * URL of the health endpoint. If not provided, defaults to localhost:18789/health.
    */
   healthUrl?: string;
+  /**
+   * If true, skip the api-health hard gate entirely.
+   */
+  skipHealth?: boolean;
 }

@@ -6,6 +6,7 @@ export type LocalStateBackupScope =
   | 'identity'
   | 'memory'
   | 'runtime-db'
+  | 'config'
   | 'policy-profiles'
   | 'mcp-config'
   | 'skill-packages';

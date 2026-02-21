@@ -20,7 +20,7 @@
     - `model-router.spec.ts` persists `intelligent_pacing` into `model_routing_settings`.
       This propagates to any test file that constructs a `ModelRouter`/`MockModelRouter`
       without an explicit `fallbackMode` override.
-- [ ] **Task: Conductor - User Manual Verification 'Phase 1'**
+- [x] **Task: Conductor - User Manual Verification 'Phase 1'**
 
 ## Phase 2: Fixture & Test Contract Repair
 - [x] **Task: Implement Session-First Fixture Helpers**
@@ -38,7 +38,7 @@
   - [x] Prevent cascading skips caused by avoidable fixture failure.
     - Fixing Scenario 3 removes the 5-second leaked async that was corrupting
       Scenario 4's mock-response pool, eliminating the cascade.
-- [ ] **Task: Conductor - User Manual Verification 'Phase 2'**
+- [x] **Task: Conductor - User Manual Verification 'Phase 2'**
 
 ## Phase 3: Suite Validation & Regression Safety
 - [x] **Task: Validate Harness Stability**
@@ -59,4 +59,4 @@
   - [x] Document fixture invariants for future agent tracks.
     - Inline comments on `buildRequest` helpers in both `runner.spec.ts` and
       `orchestration-edge.spec.ts` state the ordering invariant.
-- [ ] **Task: Conductor - User Manual Verification 'Phase 3'**
+- [x] **Task: Conductor - User Manual Verification 'Phase 3'**

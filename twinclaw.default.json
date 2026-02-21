@@ -33,5 +33,9 @@
         "embeddingModel": "text-embedding-3-small",
         "ollamaBaseUrl": "http://localhost:11434",
         "ollamaEmbeddingModel": "mxbai-embed-large"
+    },
+    "tools": {
+        "allow": [],
+        "deny": []
     }
 }

@@ -1,12 +1,6 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-try {
-    require('dotenv-vault/config');
-}
-catch (err) {
-    // dotenv-vault is optional for development
-}
-import { runOnboarding, runSetupWizard, startBasicREPL } from './core/onboarding.js';
+import { handleOnboardCli, runOnboarding, runSetupWizard, startBasicREPL } from './core/onboarding.js';
 import { Gateway } from './core/gateway.js';
 import { handleDoctorCli, handleHelpCli, handleUnknownCommand } from './core/cli.js';
 import { HeartbeatService } from './core/heartbeat.js';
@@ -29,11 +23,17 @@ import { logThought } from './utils/logger.js';
 import { PolicyEngine } from './services/policy-engine.js';
 import { savePolicyAuditLog } from './services/db.js';
 import { getSecretVaultService } from './services/secret-vault.js';
+import { getConfigValue, checkAndMigrateWorkspace } from './config/config-loader.js';
+import { getIdentityDir, getWorkspaceSubdir } from './config/workspace.js';
 import { handleSecretVaultCli } from './core/secret-vault-cli.js';
+import { handlePairingCli } from './core/pairing-cli.js';
 import { handleChannelsCli } from './core/channels-cli.js';
+import { handleGatewayCli } from './core/gateway-cli.js';
+import { handleLogsCli } from './core/logs-cli.js';
+import { getDmPairingService } from './services/dm-pairing.js';
 import { randomUUID } from 'node:crypto';
-import path from 'node:path';
 const secretVault = getSecretVaultService();
+const pairingService = getDmPairingService();
 // ── Early one-shot CLI commands (bypass service startup) ─────────────────────
 if (handleHelpCli(process.argv.slice(2))) {
     process.exit(process.exitCode ?? 0);
@@ -42,6 +42,26 @@ if (handleDoctorCli(process.argv.slice(2))) {
     process.exit(process.exitCode ?? 0);
 }
 if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
+    process.exit(process.exitCode ?? 0);
+}
+if (handlePairingCli(process.argv.slice(2), pairingService)) {
+    process.exit(process.exitCode ?? 0);
+}
+const onboardCliHandled = await handleOnboardCli(process.argv.slice(2));
+if (onboardCliHandled) {
+    process.exit(process.exitCode ?? 0);
+}
+const logsCliHandled = await handleLogsCli(process.argv.slice(2));
+if (logsCliHandled) {
+    if (process.argv.includes('--follow') || process.argv.includes('-f')) {
+        await new Promise(() => { }); // Block event loop for watcher
+    }
+    else {
+        process.exit(process.exitCode ?? 0);
+    }
+}
+const gatewayCliHandled = await handleGatewayCli(process.argv.slice(2));
+if (gatewayCliHandled) {
     process.exit(process.exitCode ?? 0);
 }
 const channelsCliHandled = await handleChannelsCli(process.argv.slice(2));
@@ -62,6 +82,7 @@ if (onboardFlag) {
     await runOnboarding();
     process.exit(0);
 }
+checkAndMigrateWorkspace();
 // ── Auto-Setup Trigger (If critical config missing) ──────────────────────────
 async function tryAutoSetup() {
     try {
@@ -70,7 +91,11 @@ async function tryAutoSetup() {
     catch (error) {
         console.log("\n[TwinClaw] Welcome! Critical configuration missing.");
         console.log("Starting the interactive setup wizard to configure your agent.\n");
-        await runSetupWizard();
+        const result = await runSetupWizard();
+        if (result.status !== 'success') {
+            const exitCode = result.status === 'cancelled' ? 130 : 1;
+            process.exit(exitCode);
+        }
         console.log("\n[TwinClaw] Setup complete. Initializing Gateway...\n");
     }
 }
@@ -78,8 +103,14 @@ if (!isSetupMode) {
     await tryAutoSetup();
 }
 else {
-    await runSetupWizard();
-    process.exit(0);
+    const result = await runSetupWizard();
+    if (result.status === 'success') {
+        process.exit(0);
+    }
+    if (result.status === 'cancelled') {
+        process.exit(130);
+    }
+    process.exit(1);
 }
 console.log("TwinClaw Gateway Initialized.");
 // ── Heartbeat & Job Scheduler ────────────────────────────────────────────────
@@ -90,17 +121,15 @@ heartbeat.start();
 void logThought('TwinClaw process started and heartbeat initialized.');
 // ── File Watcher ─────────────────────────────────────────────────────────────
 const fileWatcher = new FileWatcherService();
-const identityDir = path.resolve('identity');
 fileWatcher.addTarget({
     id: 'identity',
-    directory: identityDir,
+    directory: getIdentityDir(),
     exclude: [],
 });
-const memoryDir = path.resolve('memory');
 fileWatcher.addTarget({
     id: 'memory-logs',
-    directory: memoryDir,
-    exclude: ['**/*.db', '**/*.db-journal'],
+    directory: getWorkspaceSubdir('memory'),
+    exclude: ['**/*.db', '**/*.db-journal', '**/*.sqlite', '**/*.sqlite-journal'],
 });
 // ── MCP Skill Registry & Server Manager ──────────────────────────────────────
 const skillRegistry = new SkillRegistry();
@@ -126,29 +155,51 @@ const policyEngine = new PolicyEngine();
 policyEngine.onDecision = (sessionId, decision) => {
     savePolicyAuditLog(randomUUID(), sessionId, decision.skillName, decision.action, decision.reason, decision.profileId);
 };
+function parseToolSelectors(rawValue) {
+    if (!rawValue) {
+        return [];
+    }
+    return rawValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+}
 const runtimeBudgetGovernor = new RuntimeBudgetGovernor();
 const modelRouter = new ModelRouter({ budgetGovernor: runtimeBudgetGovernor });
-const gateway = new Gateway(skillRegistry, { policyEngine, router: modelRouter });
+const gateway = new Gateway(skillRegistry, {
+    policyEngine,
+    router: modelRouter,
+    toolPolicy: {
+        allow: parseToolSelectors(getConfigValue('TOOLS_ALLOW')),
+        deny: parseToolSelectors(getConfigValue('TOOLS_DENY')),
+    },
+});
 const telegramBotToken = secretVault.readSecret('TELEGRAM_BOT_TOKEN');
-const telegramUserId = process.env.TELEGRAM_USER_ID;
-const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? process.env.WHATSAPP_PHONE_NUMBER;
+const telegramUserId = getConfigValue('TELEGRAM_USER_ID')?.trim();
+const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? getConfigValue('WHATSAPP_PHONE_NUMBER');
 const groqApiKey = secretVault.readSecret('GROQ_API_KEY');
 let dispatcher = null;
-if ((telegramBotToken && telegramUserId) || whatsappPhoneNumber) {
+if (telegramBotToken || whatsappPhoneNumber) {
     if (groqApiKey) {
         let telegramHandler;
         let whatsappHandler;
-        if (telegramBotToken && telegramUserId) {
-            const parsedTelegramUserId = Number(telegramUserId);
-            if (!Number.isInteger(parsedTelegramUserId)) {
-                console.error('[TwinClaw] TELEGRAM_USER_ID must be a valid integer.');
-            }
-            else {
-                telegramHandler = new TelegramHandler(telegramBotToken, parsedTelegramUserId);
+        const telegramAllowFrom = [];
+        const whatsappAllowFrom = [];
+        if (telegramBotToken) {
+            telegramHandler = new TelegramHandler(telegramBotToken);
+            if (telegramUserId) {
+                const parsedTelegramUserId = Number(telegramUserId);
+                if (!Number.isInteger(parsedTelegramUserId) || parsedTelegramUserId <= 0) {
+                    console.error('[TwinClaw] TELEGRAM_USER_ID must be a positive integer when provided.');
+                }
+                else {
+                    telegramAllowFrom.push(String(parsedTelegramUserId));
+                }
             }
         }
         if (whatsappPhoneNumber) {
-            whatsappHandler = new WhatsAppHandler(whatsappPhoneNumber);
+            whatsappHandler = new WhatsAppHandler();
+            whatsappAllowFrom.push(whatsappPhoneNumber);
         }
         const sttService = new SttService(groqApiKey);
         const ttsService = new TtsService(groqApiKey);
@@ -170,7 +221,17 @@ if ((telegramBotToken && telegramUserId) || whatsappPhoneNumber) {
             }
         }, heartbeat.scheduler);
         queueService.start();
-        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway, queueService);
+        dispatcher = new Dispatcher(telegramHandler, whatsappHandler, sttService, ttsService, gateway, queueService, {
+            pairingService,
+            telegram: {
+                dmPolicy: 'pairing',
+                allowFrom: telegramAllowFrom,
+            },
+            whatsapp: {
+                dmPolicy: 'pairing',
+                allowFrom: whatsappAllowFrom,
+            },
+        });
         void logThought('[TwinClaw] Messaging dispatcher and persistent queue initialized.');
     }
     else {
@@ -235,6 +296,7 @@ const runtimeEventProducer = new RuntimeEventProducer({
     dispatcher: dispatcher ?? undefined,
     modelRouter,
 });
+const apiPort = Number(getConfigValue('API_PORT')) || 18789;
 startApiServer({
     heartbeat,
     skillRegistry,
@@ -248,6 +310,41 @@ startApiServer({
     wsHub,
 });
 runtimeEventProducer.start();
+async function waitForStartupHealthProbe(port, timeoutMs = 30_000, intervalMs = 500) {
+    const healthUrl = `http://localhost:${port}/health`;
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+        try {
+            const response = await fetch(healthUrl, {
+                method: 'GET',
+                headers: { accept: 'application/json' },
+                signal: AbortSignal.timeout(2_000),
+            });
+            if (response.ok) {
+                const body = await response.json();
+                if (body.data?.status === 'ok' || body.data?.status === 'degraded') {
+                    return true;
+                }
+            }
+        }
+        catch {
+            // Server not ready yet, continue polling
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return false;
+}
+void (async () => {
+    const healthOk = await waitForStartupHealthProbe(apiPort);
+    if (healthOk) {
+        console.log('[TwinClaw] Startup health probe passed. Gateway is ready.');
+        void logThought('[TwinClaw] Startup health probe passed.');
+    }
+    else {
+        console.error('[TwinClaw] Startup health probe failed within timeout. Gateway may not be healthy.');
+        void logThought('[TwinClaw] Startup health probe FAILED.');
+    }
+})();
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 process.on('SIGINT', () => {
     heartbeat.stop();

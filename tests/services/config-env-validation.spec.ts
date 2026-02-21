@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { resetSecretVaultServiceForTests } from '../../src/services/secret-vault.js';
 import { validateRuntimeConfig, assertRuntimeConfig } from '../../src/config/env-validator.js';
+import { clearConfigCacheForTests } from '../../src/config/json-config.js';
 import { CONFIG_SCHEMA } from '../../src/config/env-schema.js';
 
 // Helper: set a batch of env vars and return a cleanup function.
@@ -53,8 +54,11 @@ describe('validateRuntimeConfig', () => {
   beforeEach(() => {
     // Reset the singleton so tests that touch process.env get a fresh read path.
     resetSecretVaultServiceForTests();
+    clearConfigCacheForTests();
     // Clear all known config keys from the environment before each test.
-    const cleared: Record<string, undefined> = {};
+    const cleared: Record<string, string | undefined> = {
+      TWINCLAW_CONFIG_PATH: '/dev/null/does-not-exist.json',
+    };
     for (const spec of CONFIG_SCHEMA) {
       cleared[spec.key] = undefined;
     }
@@ -65,6 +69,7 @@ describe('validateRuntimeConfig', () => {
     cleanupEnv?.();
     cleanupEnv = null;
     resetSecretVaultServiceForTests();
+    clearConfigCacheForTests();
   });
 
   it('reports missing_required when API_SECRET is absent', () => {
@@ -297,17 +302,25 @@ describe('validateRuntimeConfig', () => {
 });
 
 describe('assertRuntimeConfig', () => {
+  let cleanupEnv: (() => void) | null = null;
+
   beforeEach(() => {
     resetSecretVaultServiceForTests();
-    const cleared: Record<string, undefined> = {};
+    clearConfigCacheForTests();
+    const cleared: Record<string, string | undefined> = {
+      TWINCLAW_CONFIG_PATH: '/dev/null/does-not-exist.json',
+    };
     for (const spec of CONFIG_SCHEMA) {
       cleared[spec.key] = undefined;
     }
-    withEnv(cleared);
+    cleanupEnv = withEnv(cleared);
   });
 
   afterEach(() => {
+    cleanupEnv?.();
+    cleanupEnv = null;
     resetSecretVaultServiceForTests();
+    clearConfigCacheForTests();
   });
 
   it('throws with a redaction-safe message when API_SECRET is missing', () => {

@@ -1,0 +1,10 @@
+{
+  "id": "58",
+  "title": "MVP Gate v2 (Deep Config/Vault Validation)",
+  "description": "Deep validation for twinclaw.json, onboard execution and vault health.",
+  "status": "completed",
+  "owner": "platform",
+  "priority": "high",
+  "created_at": "2026-02-21",
+  "labels": ["mvp", "validation"]
+}

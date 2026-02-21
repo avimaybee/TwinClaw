@@ -2,6 +2,7 @@ import { Writable } from 'node:stream';
 import * as readline from 'readline';
 import { assembleContext } from './context-assembly.js';
 import { Gateway } from './gateway.js';
+import type { Message } from './types.js';
 import {
   getConfigPath,
   readConfig,
@@ -10,6 +11,7 @@ import {
   type TwinClawConfig,
 } from '../config/config-loader.js';
 import { initializeWorkspace, getWorkspaceDir } from '../config/workspace.js';
+import { ensureIdentityFiles } from '../config/identity-bootstrap.js';
 import { createSession, saveMessage } from '../services/db.js';
 import { indexConversationTurn, retrieveMemoryContext } from '../services/semantic-memory.js';
 import { ModelRouter } from '../services/model-router.js';
@@ -34,7 +36,7 @@ export async function runOnboarding() {
     'This is the onboarding session. Ask the user 3 questions, one at a time, to establish their goals, routines, and how they want you to behave.';
   const context = await assembleContext(onboardingInstructions);
 
-  const messages: any[] = [{ role: 'system', content: context }];
+  const messages: Message[] = [{ role: 'system', content: context }];
 
   const askModel = async () => {
     const responseMessage = await router.createChatCompletion(messages, undefined, { sessionId });
@@ -718,6 +720,7 @@ export async function runSetupWizard(options: SetupWizardOptions = {}): Promise<
   await writeConfig(candidate, options.configPathOverride);
   reloadConfig();
   initializeWorkspace();
+  ensureIdentityFiles();
   logger.log(`\nConfiguration saved to ${configPath}.`);
   logger.log(`Workspace initialized at ${getWorkspaceDir()}.`);
   printWarnings(validation.warnings, logger);

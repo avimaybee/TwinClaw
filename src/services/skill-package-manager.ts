@@ -969,8 +969,7 @@ export class SkillPackageManager {
   }
 
   #commandExists(commandName: string): boolean {
-    const checker = process.platform === 'win32' ? 'where' : 'which';
-    const result = spawnSync(checker, [commandName], { stdio: 'ignore' });
+    const result = spawnSync('where', [commandName], { stdio: 'ignore' });
     return result.status === 0;
   }
 

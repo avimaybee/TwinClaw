@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import express from 'express';
-import { handleHealth, type HealthDeps } from './handlers/health.js';
+import { handleHealth, handleLiveness, handleReadiness, type HealthDeps } from './handlers/health.js';
 import { handleBrowserSnapshot, handleBrowserClick, type BrowserDeps } from './handlers/browser.js';
 import { handleWebhookCallback, type CallbackDeps } from './handlers/callback.js';
 import {
@@ -55,7 +55,7 @@ export interface ApiServerDeps {
     wsHub?: WsHub;
 }
 
-const DEFAULT_PORT = 3100;
+const DEFAULT_PORT = 18789;
 
 /**
  * Create and start the Control Plane HTTP API server.
@@ -120,6 +120,8 @@ export function startApiServer(deps: ApiServerDeps): void {
 
     // ── Routes ──────────────────────────────────────────────────────────────────
     app.get('/health', handleHealth(healthDeps));
+    app.get('/health/live', handleLiveness());
+    app.get('/health/ready', handleReadiness(healthDeps));
     app.get('/config/validate', handleConfigValidate());
     app.get('/backup/diagnostics', handleLocalStateBackupDiagnostics(localStateBackupDeps));
     app.post('/backup/snapshot', handleLocalStateCreateSnapshot(localStateBackupDeps));

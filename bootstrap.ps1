@@ -16,6 +16,16 @@ try {
 Write-Host "Installing dependencies..." -ForegroundColor Cyan
 npm install
 
-# 3. Start the agent (which will auto-trigger setup if needed)
+# 3. Configure git hooks for local type-check guardrail
+if (Test-Path .git) {
+    try {
+        npm run setup:hooks | Out-Null
+        Write-Host "✓ Git pre-commit hook path configured (.githooks)." -ForegroundColor Green
+    } catch {
+        Write-Host "! Unable to configure git hook path automatically." -ForegroundColor Yellow
+    }
+}
+
+# 4. Start the agent (which will auto-trigger setup if needed)
 Write-Host "Starting TwinClaw..." -ForegroundColor Cyan
 npm start

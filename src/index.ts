@@ -37,6 +37,16 @@ import { randomUUID } from 'node:crypto';
 const secretVault = getSecretVaultService();
 const pairingService = getDmPairingService();
 
+function assertWindowsOnlyRuntime(): void {
+    if (process.platform === 'win32') {
+        return;
+    }
+    console.error(`[TwinClaw] Windows-only runtime: detected unsupported platform '${process.platform}'.`);
+    process.exit(1);
+}
+
+assertWindowsOnlyRuntime();
+
 // ── Early one-shot CLI commands (bypass service startup) ─────────────────────
 
 if (handleHelpCli(process.argv.slice(2))) {
@@ -368,6 +378,8 @@ const runtimeEventProducer = new RuntimeEventProducer({
     modelRouter,
 });
 
+const apiPort = Number(getConfigValue('API_PORT')) || 18789;
+
 startApiServer({
     heartbeat,
     skillRegistry,
@@ -382,6 +394,49 @@ startApiServer({
 });
 
 runtimeEventProducer.start();
+
+async function waitForStartupHealthProbe(
+    port: number,
+    timeoutMs: number = 30_000,
+    intervalMs: number = 500,
+): Promise<boolean> {
+    const healthUrl = `http://localhost:${port}/health`;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+        try {
+            const response = await fetch(healthUrl, {
+                method: 'GET',
+                headers: { accept: 'application/json' },
+                signal: AbortSignal.timeout(2_000),
+            });
+
+            if (response.ok) {
+                const body = await response.json() as { data?: { status?: string } };
+                if (body.data?.status === 'ok' || body.data?.status === 'degraded') {
+                    return true;
+                }
+            }
+        } catch {
+            // Server not ready yet, continue polling
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    return false;
+}
+
+void (async () => {
+    const healthOk = await waitForStartupHealthProbe(apiPort);
+    if (healthOk) {
+        console.log('[TwinClaw] Startup health probe passed. Gateway is ready.');
+        void logThought('[TwinClaw] Startup health probe passed.');
+    } else {
+        console.error('[TwinClaw] Startup health probe failed within timeout. Gateway may not be healthy.');
+        void logThought('[TwinClaw] Startup health probe FAILED.');
+    }
+})();
 
 // ── Signal Handlers ──────────────────────────────────────────────────────────
 
