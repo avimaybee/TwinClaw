@@ -40,6 +40,7 @@ import { sendOk } from './shared.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { WsHub } from './websocket-hub.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 export interface ApiServerDeps {
     heartbeat: HeartbeatService;
@@ -85,7 +86,7 @@ const DEFAULT_PORT = 3100;
  */
 export function startApiServer(deps: ApiServerDeps): void {
     const app = express();
-    const port = Number(process.env.API_PORT) || DEFAULT_PORT;
+    const port = Number(getConfigValue('API_PORT')) || DEFAULT_PORT;
     const server = createServer(app);
 
     // Attach WebSocket hub if provided

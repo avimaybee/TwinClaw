@@ -1,5 +1,6 @@
 import { JobScheduler } from '../services/job-scheduler.js';
 import { logThought } from '../utils/logger.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 export interface HeartbeatConfig {
   cronExpression?: string;
@@ -37,8 +38,8 @@ export class HeartbeatService {
     scheduler?: JobScheduler,
   ) {
     this.#onHeartbeat = onHeartbeat;
-    this.#cronExpression = config.cronExpression ?? process.env.HEARTBEAT_CRON ?? DEFAULT_CRON;
-    this.#message = config.message ?? process.env.HEARTBEAT_MESSAGE ?? DEFAULT_MESSAGE;
+    this.#cronExpression = config.cronExpression ?? getConfigValue('HEARTBEAT_CRON') ?? DEFAULT_CRON;
+    this.#message = config.message ?? getConfigValue('HEARTBEAT_MESSAGE') ?? DEFAULT_MESSAGE;
     this.#scheduler = scheduler ?? new JobScheduler();
   }
 

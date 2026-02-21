@@ -28,6 +28,7 @@ import { logThought } from './utils/logger.js';
 import { PolicyEngine } from './services/policy-engine.js';
 import { savePolicyAuditLog } from './services/db.js';
 import { getSecretVaultService } from './services/secret-vault.js';
+import { getConfigValue } from './config/config-loader.js';
 import { handleSecretVaultCli } from './core/secret-vault-cli.js';
 import { handlePairingCli } from './core/pairing-cli.js';
 import { handleChannelsCli } from './core/channels-cli.js';
@@ -173,8 +174,8 @@ const runtimeBudgetGovernor = new RuntimeBudgetGovernor();
 const modelRouter = new ModelRouter({ budgetGovernor: runtimeBudgetGovernor });
 const gateway = new Gateway(skillRegistry, { policyEngine, router: modelRouter });
 const telegramBotToken = secretVault.readSecret('TELEGRAM_BOT_TOKEN');
-const telegramUserId = process.env.TELEGRAM_USER_ID?.trim();
-const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? process.env.WHATSAPP_PHONE_NUMBER;
+const telegramUserId = getConfigValue('TELEGRAM_USER_ID')?.trim();
+const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? getConfigValue('WHATSAPP_PHONE_NUMBER');
 const groqApiKey = secretVault.readSecret('GROQ_API_KEY');
 
 let dispatcher: Dispatcher | null = null;

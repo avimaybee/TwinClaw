@@ -4,9 +4,13 @@ import {
   checkBinary,
   checkEnvVar,
   checkFilesystem,
+  checkConfigSchema,
+  checkChannelAuth,
   runDoctorChecks,
   formatDoctorReport,
 } from '../../src/core/doctor.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 // ── checkEnvVar ──────────────────────────────────────────────────────────────
 
@@ -121,6 +125,80 @@ describe('checkBinary', () => {
     const result = checkBinary(check);
     expect(result.passed).toBe(false);
     expect(result.message).toMatch(/not found/i);
+  });
+});
+
+// ── checkConfigSchema ────────────────────────────────────────────────────────
+
+describe('checkConfigSchema', () => {
+  const check: DoctorCheck = {
+    kind: 'config-schema',
+    name: 'twinclaw.json',
+    description: 'config',
+    severity: 'critical',
+    remediation: 'fix',
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fails when config file is missing', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const result = checkConfigSchema(check);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('Config file not found');
+    expect(result.message).not.toContain('secret-value'); // safe diagnostics
+  });
+
+  it('fails gracefully when config file is invalid JSON', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'readFileSync').mockReturnValue('invalid { json');
+    const result = checkConfigSchema(check);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('invalid JSON');
+  });
+
+  it('passes when config file is valid JSON', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'readFileSync').mockReturnValue('{"runtime":{}}');
+    const result = checkConfigSchema(check);
+    expect(result.passed).toBe(true);
+  });
+});
+
+// ── checkChannelAuth ─────────────────────────────────────────────────────────
+
+describe('checkChannelAuth', () => {
+  const check: DoctorCheck = {
+    kind: 'channel-auth',
+    name: 'whatsapp',
+    description: 'auth',
+    severity: 'warning',
+    remediation: 'login',
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fails for unknown channels', () => {
+    const result = checkChannelAuth({ ...check, name: 'unknown_chan' });
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('Unknown channel');
+  });
+
+  it('fails when whatsapp auth directory does not exist (disconnected)', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const result = checkChannelAuth(check);
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('does not exist');
+  });
+
+  it('passes when whatsapp auth directory exists (successful link)', () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    const result = checkChannelAuth(check);
+    expect(result.passed).toBe(true);
   });
 });
 

@@ -9,6 +9,8 @@ import type {
   DoctorSeverity,
   DoctorStatus,
 } from '../types/doctor.js';
+import { getConfigValue } from '../config/config-loader.js';
+import { getSecretVaultService } from '../services/secret-vault.js';
 
 // ── Built-in check definitions ───────────────────────────────────────────────
 
@@ -181,7 +183,8 @@ export function checkBinary(check: DoctorCheck): DoctorCheckResult {
 
 /** @internal exported for testing */
 export function checkEnvVar(check: DoctorCheck): DoctorCheckResult {
-  const value = process.env[check.name];
+  const secret = getSecretVaultService().readSecret(check.name);
+  const value = secret ?? getConfigValue(check.name);
   if (!value || value.trim().length === 0) {
     return {
       check,

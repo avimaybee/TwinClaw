@@ -483,20 +483,20 @@ export class MvpGateService {
   async #runDoctorReadinessCheck(): Promise<MvpCheckResult> {
     const startedAt = nowIso(this.#now);
     const started = Date.now();
-    const onboardingPath = path.join(this.#workspaceRoot, 'src', 'core', 'onboarding.ts');
-    const exists = await pathExists(onboardingPath);
+    const doctorPath = path.join(this.#workspaceRoot, 'src', 'core', 'doctor.ts');
+    const exists = await pathExists(doctorPath);
 
     return {
       id: 'doctor-readiness',
       class: 'advisory',
       status: exists ? 'passed' : 'failed',
       detail: exists
-        ? 'Onboarding/doctor entrypoint is present (src/core/onboarding.ts).'
-        : 'Onboarding module is missing — Track 23 must wire the doctor/onboarding CLI path.',
+        ? 'Doctor diagnostics module is present (src/core/doctor.ts).'
+        : 'Doctor module is missing — Track 23 should wire the system diagnostic logic.',
       startedAt,
       completedAt: nowIso(this.#now),
       durationMs: Date.now() - started,
-      artifacts: exists ? [onboardingPath] : undefined,
+      artifacts: exists ? [doctorPath] : undefined,
     };
   }
 

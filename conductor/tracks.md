@@ -98,6 +98,8 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/mvp_gate_wizard_alignment_20260221/](./archive/mvp_gate_wizard_alignment_20260221/)*
 - [x] **Track 51: Agent Roadmap/Execution-Plan Docs Migration**
   *Link: [./archive/docs_agent_plan_migration_20260221/](./archive/docs_agent_plan_migration_20260221/)*
+- [x] **Track 50: PRD + Blueprint Architectural Docs Migration**
+  *Link: [./archive/docs_prd_blueprint_migration_20260221/](./archive/docs_prd_blueprint_migration_20260221/)*
 
 ---
 
@@ -113,6 +115,4 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./tracks/dm_pairing_policy_20260221/](./tracks/dm_pairing_policy_20260221/)*
 - [ ] **Track 49: Channel Login + Doctor Validation Surfaces**
   *Link: [./tracks/channels_login_doctor_20260221/](./tracks/channels_login_doctor_20260221/)*
-- [x] **Track 50: PRD + Blueprint Architectural Docs Migration**
-  *Link: [./tracks/docs_prd_blueprint_migration_20260221/](./tracks/docs_prd_blueprint_migration_20260221/)*
 

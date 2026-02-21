@@ -39,7 +39,7 @@ async function createWorkspace(): Promise<string> {
 
   // Required files
   await writeFile(path.join(workspace, 'mcp-servers.json'), '{}', 'utf8');
-  await writeFile(path.join(workspace, '.env.example'), 'TELEGRAM_BOT_TOKEN=\n', 'utf8');
+  await writeFile(path.join(workspace, 'twinclaw.default.json'), '{}\n', 'utf8');
   await writeFile(
     path.join(workspace, 'gui', 'package.json'),
     JSON.stringify({ name: 'gui-test' }),
@@ -50,6 +50,7 @@ async function createWorkspace(): Promise<string> {
   await writeFile(path.join(workspace, 'src', 'services', 'db.ts'), 'export {};', 'utf8');
   await writeFile(path.join(workspace, 'src', 'core', 'gateway.ts'), 'export {};', 'utf8');
   await writeFile(path.join(workspace, 'src', 'core', 'onboarding.ts'), 'export {};', 'utf8');
+  await writeFile(path.join(workspace, 'src', 'core', 'doctor.ts'), 'export {};', 'utf8');
   // Stub dist output so dist-artifact advisory passes
   await writeFile(path.join(workspace, 'dist', 'index.js'), 'export {};', 'utf8');
 
@@ -202,11 +203,11 @@ describe('MvpGateService', () => {
     expect(npmCheck?.detail).toContain('release:preflight');
   });
 
-  it('fails env-config check when .env.example is missing', async () => {
+  it('fails cli-onboard check when src/core/onboarding.ts is missing', async () => {
     const workspace = await createWorkspace();
     workspaces.push(workspace);
 
-    await rm(path.join(workspace, '.env.example'), { force: true });
+    await rm(path.join(workspace, 'src', 'core', 'onboarding.ts'), { force: true });
 
     const service = new MvpGateService({
       workspaceRoot: workspace,
@@ -217,16 +218,16 @@ describe('MvpGateService', () => {
     const report = await service.runGate();
 
     expect(report.verdict).toBe('no-go');
-    const envCheck = report.checks.find((c) => c.id === 'env-config');
-    expect(envCheck?.status).toBe('failed');
+    const onboardCheck = report.checks.find((c) => c.id === 'cli-onboard');
+    expect(onboardCheck?.status).toBe('failed');
   });
 
   it('returns advisory-only verdict when only advisory checks fail', async () => {
     const workspace = await createWorkspace();
     workspaces.push(workspace);
 
-    // Remove onboarding (doctor-readiness advisory) and no dist/ (dist-artifact advisory)
-    await rm(path.join(workspace, 'src', 'core', 'onboarding.ts'), { force: true });
+    // Remove doctor (doctor-readiness advisory) and no dist/ (dist-artifact advisory)
+    await rm(path.join(workspace, 'src', 'core', 'doctor.ts'), { force: true });
 
     const service = new MvpGateService({
       workspaceRoot: workspace,
@@ -263,7 +264,7 @@ describe('MvpGateService', () => {
     const workspace = await createWorkspace();
     workspaces.push(workspace);
 
-    await rm(path.join(workspace, 'mcp-servers.json'), { force: true });
+    await rm(path.join(workspace, 'twinclaw.default.json'), { force: true });
 
     const service = new MvpGateService({
       workspaceRoot: workspace,
@@ -273,8 +274,8 @@ describe('MvpGateService', () => {
 
     const report = await service.runGate();
 
-    const mcpScenario = report.smokeScenarios.find((s) => s.id === 'core:mcp-config');
-    expect(mcpScenario?.pass).toBe(false);
+    const configScenario = report.smokeScenarios.find((s) => s.id === 'core:config-template');
+    expect(configScenario?.pass).toBe(false);
   });
 
   it('writes json and markdown reports to disk', async () => {

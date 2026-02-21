@@ -121,6 +121,22 @@ describe('validateRuntimeConfig', () => {
     }
   });
 
+  it('does not require TELEGRAM_USER_ID when TELEGRAM_BOT_TOKEN is configured', () => {
+    const cleanup = withEnv({
+      API_SECRET: 'test-secret',
+      TELEGRAM_BOT_TOKEN: 'tg-bot-token',
+    });
+    resetSecretVaultServiceForTests();
+
+    try {
+      const result = validateRuntimeConfig();
+      const telegramUserIssue = result.issues.find((i) => i.key === 'TELEGRAM_USER_ID');
+      expect(telegramUserIssue).toBeUndefined();
+    } finally {
+      cleanup();
+    }
+  });
+
   it('does NOT emit voice issue when messaging platform is absent', () => {
     const cleanup = withEnv({ API_SECRET: 'test-secret' });
     resetSecretVaultServiceForTests();

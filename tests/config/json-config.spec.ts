@@ -47,11 +47,11 @@ describe('Config JSON Foundation', () => {
         await expect(readConfig()).rejects.toThrow(/Failed to parse config file/);
     });
 
-    it('sync maps flat getConfigValue correctly with fallbacks', () => {
+    it('sync maps flat getConfigValue correctly with fallbacks', async () => {
         // Write structured
         const customConfig: TwinClawConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
         customConfig.models.modalApiKey = 'struct-key';
-        fs.writeFile(tempConfigPath, JSON.stringify(customConfig), 'utf8');
+        await fs.writeFile(tempConfigPath, JSON.stringify(customConfig), 'utf8');
 
         reloadConfigSync();
 
