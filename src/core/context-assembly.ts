@@ -1,25 +1,26 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { getIdentityDir } from '../config/workspace.js';
 
-/**
- * Assembles the system prompt by compiling core identity files.
- */
 export async function assembleContext(additionalRuntimeContext: string = ''): Promise<string> {
     let soul = '';
     let identity = '';
     let user = '';
 
-    const readOptionalFile = async (filePath: string) => {
+    const identityDir = getIdentityDir();
+    
+    const readOptionalFile = async (fileName: string) => {
         try {
-            return await fs.readFile(path.resolve(filePath), 'utf-8');
+            const filePath = path.join(identityDir, fileName);
+            return await fs.readFile(filePath, 'utf-8');
         } catch {
             return '';
         }
     };
 
-    soul = await readOptionalFile('identity/soul.md');
-    identity = await readOptionalFile('identity/identity.md');
-    user = await readOptionalFile('identity/user.md');
+    soul = await readOptionalFile('soul.md');
+    identity = await readOptionalFile('identity.md');
+    user = await readOptionalFile('user.md');
 
     const compiled = `
 You are TwinClaw. Follow your core directives exactly.

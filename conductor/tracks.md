@@ -100,19 +100,32 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/docs_agent_plan_migration_20260221/](./archive/docs_agent_plan_migration_20260221/)*
 - [x] **Track 50: PRD + Blueprint Architectural Docs Migration**
   *Link: [./archive/docs_prd_blueprint_migration_20260221/](./archive/docs_prd_blueprint_migration_20260221/)*
+- [x] **Track 45: Local Config Source-of-Truth & Schema Migration**
+  *Link: [./archive/config_json_foundation_20260221/](./archive/config_json_foundation_20260221/)*
+- [x] **Track 49: Channel Login + Doctor Validation surfaces**
+  *Link: [./archive/channels_login_doctor_20260221/](./archive/channels_login_doctor_20260221/)*
+- [x] **Track 48: DM Pairing Policy & Approval Commands**
+  *Link: [./archive/dm_pairing_policy_20260221/](./archive/dm_pairing_policy_20260221/)*
+- [x] **Track 46: Interactive CLI Onboarding Wizard (`twinclaw onboard`)**
+  *Link: [./archive/onboard_cli_wizard_20260221/](./archive/onboard_cli_wizard_20260221/)*
+- [x] **Track 56: Gateway Supervision & Remote Access Integration**
+  *Link: [./archive/gateway_supervision_remote_access_20260221/](./archive/gateway_supervision_remote_access_20260221/)*
+
+---
+
+- [x] **Track 47: Runtime Config Migration & dotenv-vault Decommission**
+  *Link: [./archive/runtime_env_migration_20260221/](./archive/runtime_env_migration_20260221/)*
 
 ---
 
 ## Active Tracks
 
-- [~] **Track 45: Local Config Source-of-Truth & Schema Migration**
-  *Link: [./tracks/config_json_foundation_20260221/](./tracks/config_json_foundation_20260221/)*
-- [ ] **Track 46: Interactive CLI Onboarding Wizard (`twinclaw onboard`)**
-  *Link: [./tracks/onboard_cli_wizard_20260221/](./tracks/onboard_cli_wizard_20260221/)*
-- [~] **Track 47: Runtime Config Migration & dotenv-vault Decommission**
-  *Link: [./tracks/runtime_env_migration_20260221/](./tracks/runtime_env_migration_20260221/)*
-- [ ] **Track 48: DM Pairing Policy & Approval Commands**
-  *Link: [./tracks/dm_pairing_policy_20260221/](./tracks/dm_pairing_policy_20260221/)*
-- [ ] **Track 49: Channel Login + Doctor Validation Surfaces**
-  *Link: [./tracks/channels_login_doctor_20260221/](./tracks/channels_login_doctor_20260221/)*
+- [x] **Track 53: TwinClaw Workspace & Profile Alignment**
+  *Link: [./tracks/twinclaw_workspace_alignment_20260221/](./tracks/twinclaw_workspace_alignment_20260221/)*
+
+- [~] **Track 54: Message Streaming, Chunking, & Queueing Adoption**
+  *Link: [./tracks/message_streaming_chunking_20260221/](./tracks/message_streaming_chunking_20260221/)*
+
+- [x] **Track 55: Native Tool Inventory & MCP Harmonization**
+  *Link: [./tracks/tool_inventory_mcp_harmonization_20260221/](./tracks/tool_inventory_mcp_harmonization_20260221/)*
 

@@ -1,11 +1,7 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-try {
-    require('dotenv-vault/config');
-} catch (err) {
-    // dotenv-vault is optional for development
-}
-import { runOnboarding, runSetupWizard, startBasicREPL } from './core/onboarding.js';
+
+import { handleOnboardCli, runOnboarding, runSetupWizard, startBasicREPL } from './core/onboarding.js';
 import { Gateway } from './core/gateway.js';
 import { handleDoctorCli, handleHelpCli, handleUnknownCommand } from './core/cli.js';
 import { HeartbeatService } from './core/heartbeat.js';
@@ -28,13 +24,15 @@ import { logThought } from './utils/logger.js';
 import { PolicyEngine } from './services/policy-engine.js';
 import { savePolicyAuditLog } from './services/db.js';
 import { getSecretVaultService } from './services/secret-vault.js';
-import { getConfigValue } from './config/config-loader.js';
+import { getConfigValue, checkAndMigrateWorkspace } from './config/config-loader.js';
+import { getIdentityDir, getWorkspaceSubdir } from './config/workspace.js';
 import { handleSecretVaultCli } from './core/secret-vault-cli.js';
 import { handlePairingCli } from './core/pairing-cli.js';
 import { handleChannelsCli } from './core/channels-cli.js';
+import { handleGatewayCli } from './core/gateway-cli.js';
+import { handleLogsCli } from './core/logs-cli.js';
 import { getDmPairingService } from './services/dm-pairing.js';
 import { randomUUID } from 'node:crypto';
-import path from 'node:path';
 
 const secretVault = getSecretVaultService();
 const pairingService = getDmPairingService();
@@ -54,6 +52,25 @@ if (handleSecretVaultCli(process.argv.slice(2), secretVault)) {
 }
 
 if (handlePairingCli(process.argv.slice(2), pairingService)) {
+    process.exit(process.exitCode ?? 0);
+}
+
+const onboardCliHandled = await handleOnboardCli(process.argv.slice(2));
+if (onboardCliHandled) {
+    process.exit(process.exitCode ?? 0);
+}
+
+const logsCliHandled = await handleLogsCli(process.argv.slice(2));
+if (logsCliHandled) {
+    if (process.argv.includes('--follow') || process.argv.includes('-f')) {
+        await new Promise(() => { }); // Block event loop for watcher
+    } else {
+        process.exit(process.exitCode ?? 0);
+    }
+}
+
+const gatewayCliHandled = await handleGatewayCli(process.argv.slice(2));
+if (gatewayCliHandled) {
     process.exit(process.exitCode ?? 0);
 }
 
@@ -79,6 +96,8 @@ if (onboardFlag) {
     process.exit(0);
 }
 
+checkAndMigrateWorkspace();
+
 // ── Auto-Setup Trigger (If critical config missing) ──────────────────────────
 
 async function tryAutoSetup() {
@@ -87,7 +106,11 @@ async function tryAutoSetup() {
     } catch (error) {
         console.log("\n[TwinClaw] Welcome! Critical configuration missing.");
         console.log("Starting the interactive setup wizard to configure your agent.\n");
-        await runSetupWizard();
+        const result = await runSetupWizard();
+        if (result.status !== 'success') {
+            const exitCode = result.status === 'cancelled' ? 130 : 1;
+            process.exit(exitCode);
+        }
         console.log("\n[TwinClaw] Setup complete. Initializing Gateway...\n");
     }
 }
@@ -95,8 +118,14 @@ async function tryAutoSetup() {
 if (!isSetupMode) {
     await tryAutoSetup();
 } else {
-    await runSetupWizard();
-    process.exit(0);
+    const result = await runSetupWizard();
+    if (result.status === 'success') {
+        process.exit(0);
+    }
+    if (result.status === 'cancelled') {
+        process.exit(130);
+    }
+    process.exit(1);
 }
 
 console.log("TwinClaw Gateway Initialized.");
@@ -114,18 +143,16 @@ void logThought('TwinClaw process started and heartbeat initialized.');
 
 const fileWatcher = new FileWatcherService();
 
-const identityDir = path.resolve('identity');
 fileWatcher.addTarget({
     id: 'identity',
-    directory: identityDir,
+    directory: getIdentityDir(),
     exclude: [],
 });
 
-const memoryDir = path.resolve('memory');
 fileWatcher.addTarget({
     id: 'memory-logs',
-    directory: memoryDir,
-    exclude: ['**/*.db', '**/*.db-journal'],
+    directory: getWorkspaceSubdir('memory'),
+    exclude: ['**/*.db', '**/*.db-journal', '**/*.sqlite', '**/*.sqlite-journal'],
 });
 
 // ── MCP Skill Registry & Server Manager ──────────────────────────────────────
@@ -170,9 +197,26 @@ policyEngine.onDecision = (sessionId, decision) => {
     );
 };
 
+function parseToolSelectors(rawValue: string | undefined): string[] {
+    if (!rawValue) {
+        return [];
+    }
+    return rawValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+}
+
 const runtimeBudgetGovernor = new RuntimeBudgetGovernor();
 const modelRouter = new ModelRouter({ budgetGovernor: runtimeBudgetGovernor });
-const gateway = new Gateway(skillRegistry, { policyEngine, router: modelRouter });
+const gateway = new Gateway(skillRegistry, {
+    policyEngine,
+    router: modelRouter,
+    toolPolicy: {
+        allow: parseToolSelectors(getConfigValue('TOOLS_ALLOW')),
+        deny: parseToolSelectors(getConfigValue('TOOLS_DENY')),
+    },
+});
 const telegramBotToken = secretVault.readSecret('TELEGRAM_BOT_TOKEN');
 const telegramUserId = getConfigValue('TELEGRAM_USER_ID')?.trim();
 const whatsappPhoneNumber = secretVault.readSecret('WHATSAPP_PHONE_NUMBER') ?? getConfigValue('WHATSAPP_PHONE_NUMBER');

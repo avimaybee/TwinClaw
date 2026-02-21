@@ -25,7 +25,7 @@
 *   **1.1 Environment Initialization:** Initialize a Node.js environment.
 *   **1.2 AntiGravity Workspace:** Set up an AntiGravity workspace configured for multi-agent workflows.
 *   **1.3 Dockerization:** Write a `Dockerfile` and `docker-compose.yml` to host the TwinClaw gateway securely.
-*   **1.4 Persistent Configuration:** Implement the `~/.twinclaw/twinclaw.json` schema to store all secrets and settings, replacing `.env`.
+*   **1.4 Persistent Configuration:** Implement the `~/.twinclaw/workspace/twinclaw.json` schema to store all secrets and settings, replacing `.env`. Supports profile isolation via `TWINCLAW_PROFILE` environment variable.
 
 > **Implementation Notes:**
 > - Run `npm init -y` and install `TwinClaw-core`.

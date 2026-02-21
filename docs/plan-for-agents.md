@@ -14,7 +14,7 @@ The implementation is divided into four distinct **Execution Streams**. Agents c
 *   **Phase A1: Environment Initialization (Agent 1)**
     *   [ ] Initialize Node.js environment (`npm init -y`) with TypeScript configured for ES2022 (top-level await).
     *   [ ] Implement the `twinclaw onboard` interactive CLI wizard to securely collect API keys and workspace settings.
-    *   [ ] Build the `twinclaw.json` configuration manager to persist settings in `~/.twinclaw/` (replacing `.env`).
+    *   [ ] Build the `twinclaw.json` configuration manager to persist settings in `~/.twinclaw/workspace/` (replacing `.env`). Supports profile isolation via `TWINCLAW_PROFILE` environment variable.
     *   [ ] Write `Dockerfile` and `docker-compose.yml`, explicitly mapping a local `./memory` volume to `/app/src/memory` for persistent state and config.
 *   **Phase A2: LLM Routing & Native Tool Calling (Agent 1)**
     *   [ ] Install and configure LiteLLM Proxy or build an internal routing abstraction.

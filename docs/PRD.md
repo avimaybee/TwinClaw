@@ -34,11 +34,11 @@ TwinClaw is a zero-cost, local-first autonomous agentic service inspired by the 
 
 ### 4.3 Identity & State Management
 TwinClaw adopts the established OpenClaw pattern of persisting the agent's identity and state locally using human-readable Markdown files and a centralized JSON configuration, allowing users to deeply customize the agent simply by conversing with it.
-- **`twinclaw.json`**: The **mandatory single source of truth** for all API keys, channel configurations, and default settings. It is initialized via `twinclaw onboard` and located at `~/.twinclaw/twinclaw.json`, strictly replacing fragile `.env` files and legacy environment variable injection.
+- **`twinclaw.json`**: The **mandatory single source of truth** for all API keys, channel configurations, and default settings. It is initialized via `twinclaw onboard` and located at `~/.twinclaw/workspace/twinclaw.json`, strictly replacing fragile `.env` files and legacy environment variable injection.
 - **`soul.md`**: The agent's constitution. Defines its core personality, operational tone, behavioral boundaries, and unbreakable directives. It ensures the AI remains stable across multiple contexts.
 - **`identity.md`**: Defines the agent's specific persona, name, role, and situational awareness to shape its operational behavior.
 - **`memory.md`**: Reserved for curated, persistent long-term facts, preferences, and crucial information that must be remembered persistently across sessions. 
-- **Short-Term Transcripts**: Daily logs (`YYYY-MM-DD.md`) capture immediate context and conversation threads.
+- **Short-Term Transcripts**: Daily logs (`YYYY-MM-DD.md`) capture immediate context and conversation threads, stored in `~/.twinclaw/workspace/transcripts/`.
 - **RAG Substrate (SQLite + sqlite-vec)**: Task summaries and memory files are vectorized using free embeddings and saved as `Float32` arrays in the `vec0` virtual table. The system performs KNN SQL `SELECT` queries to inject historical context into active prompts, granting infinite durable recall.
 
 ### 4.4 Multimodal Vision & Browser Integration

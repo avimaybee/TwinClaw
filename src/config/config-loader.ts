@@ -8,4 +8,24 @@ export {
     writeConfig,
     getConfigValue,
     reloadConfigSync as reloadConfig,
+    checkAndMigrateWorkspace,
+    hasLegacyConfig,
+    migrateLegacyConfig,
+    type WorkspaceMigrationResult,
 } from './json-config.js';
+
+export {
+    getProfileName,
+    getWorkspaceDir,
+    getWorkspaceSubdir,
+    getDatabasePath,
+    getIdentityDir,
+    getSecretsVaultPath,
+    getTranscriptsDir,
+    ensureWorkspaceDir,
+    ensureWorkspaceSubdirs,
+    initializeWorkspace,
+    initializeWorkspaceGitignore,
+    getWorkspaceSummary,
+    WORKSPACE_GITIGNORE,
+} from './workspace.js';

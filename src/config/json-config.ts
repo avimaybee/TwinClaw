@@ -1,10 +1,31 @@
 import * as fs from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import {
+    getConfigPath as getWorkspaceConfigPath,
+    hasLegacyConfig,
+    migrateLegacyConfig,
+    ensureWorkspaceDir,
+} from './workspace.js';
+
+export interface StreamingChunkingConfig {
+    blockStreamingDefault: boolean;
+    blockStreamingBreak: 'paragraph' | 'sentence';
+    blockStreamingMinChars: number;
+    blockStreamingMaxChars: number;
+    blockStreamingCoalesce: boolean;
+    humanDelayMs: number;
+}
+
+export interface InboundDebounceConfig {
+    enabled: boolean;
+    debounceMs: number;
+}
 
 export interface TwinClawConfig {
     runtime: {
+        apiSecret: string;
         apiPort: number;
         secretVaultRequired: string[];
         localStateSnapshotCron?: string;
@@ -30,6 +51,8 @@ export interface TwinClawConfig {
         voice: {
             groqApiKey: string;
         };
+        inbound: InboundDebounceConfig;
+        streaming: StreamingChunkingConfig;
     };
     storage: {
         embeddingDim: number;
@@ -43,10 +66,15 @@ export interface TwinClawConfig {
         ollamaBaseUrl: string;
         ollamaEmbeddingModel: string;
     };
+    tools: {
+        allow: string[];
+        deny: string[];
+    };
 }
 
 export const DEFAULT_CONFIG: TwinClawConfig = {
     runtime: {
+        apiSecret: '',
         apiPort: 3100,
         secretVaultRequired: [],
     },
@@ -68,6 +96,18 @@ export const DEFAULT_CONFIG: TwinClawConfig = {
         voice: {
             groqApiKey: '',
         },
+        inbound: {
+            enabled: true,
+            debounceMs: 1500,
+        },
+        streaming: {
+            blockStreamingDefault: true,
+            blockStreamingBreak: 'paragraph',
+            blockStreamingMinChars: 50,
+            blockStreamingMaxChars: 800,
+            blockStreamingCoalesce: true,
+            humanDelayMs: 800,
+        },
     },
     storage: {
         embeddingDim: 1536,
@@ -81,11 +121,19 @@ export const DEFAULT_CONFIG: TwinClawConfig = {
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaEmbeddingModel: 'mxbai-embed-large',
     },
+    tools: {
+        allow: [],
+        deny: [],
+    },
 };
 
 export function getConfigPath(overridePath?: string): string {
     if (overridePath) return path.resolve(overridePath);
-    return process.env.TWINCLAW_CONFIG_PATH || path.join(os.homedir(), '.twinclaw', 'twinclaw.json');
+    if (process.env.TWINCLAW_CONFIG_PATH) {
+        return path.resolve(process.env.TWINCLAW_CONFIG_PATH);
+    }
+    ensureWorkspaceDir();
+    return getWorkspaceConfigPath();
 }
 
 export async function ensureConfigDir(configPath: string): Promise<void> {
@@ -101,9 +149,10 @@ export async function readConfig(overridePath?: string): Promise<TwinClawConfig>
         const rawData = await fs.readFile(targetPath, 'utf-8');
         const parsed = JSON.parse(rawData);
         return mergeWithDefaults(parsed);
-    } catch (error: any) {
-        if (error.code === 'ENOENT') return { ...DEFAULT_CONFIG };
-        throw new Error(`Failed to parse config file at ${targetPath}: ${error.message}`);
+    } catch (error) {
+        const fsError = error as NodeJS.ErrnoException;
+        if (fsError.code === 'ENOENT') return mergeWithDefaults({});
+        throw new Error(`Failed to parse config file at ${targetPath}: ${fsError.message}`);
     }
 }
 
@@ -115,25 +164,53 @@ export async function writeConfig(config: TwinClawConfig, overridePath?: string)
         const serialized = JSON.stringify(config, null, 2);
         await fs.writeFile(tempPath, serialized, { encoding: 'utf-8', mode: 0o600 });
         await fs.rename(tempPath, targetPath);
-    } catch (error: any) {
+    } catch (error) {
+        const fsError = error as NodeJS.ErrnoException;
         try { if (existsSync(tempPath)) await fs.unlink(tempPath); } catch (_) { }
-        throw new Error(`Failed to save config to ${targetPath}: ${error.message}`);
+        throw new Error(`Failed to save config to ${targetPath}: ${fsError.message}`);
     }
 }
 
-function mergeWithDefaults(loaded: any): TwinClawConfig {
+function mergeWithDefaults(loaded: unknown): TwinClawConfig {
+    const loadedRecord = (typeof loaded === 'object' && loaded !== null
+        ? loaded as Record<string, unknown>
+        : {}) as Record<string, unknown>;
     const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as TwinClawConfig;
-    if (!loaded) return config;
+    if (!loadedRecord) return config;
 
-    if (loaded.runtime) config.runtime = { ...config.runtime, ...loaded.runtime };
-    if (loaded.models) config.models = { ...config.models, ...loaded.models };
-    if (loaded.messaging) {
-        if (loaded.messaging.telegram) config.messaging.telegram = { ...config.messaging.telegram, ...loaded.messaging.telegram };
-        if (loaded.messaging.whatsapp) config.messaging.whatsapp = { ...config.messaging.whatsapp, ...loaded.messaging.whatsapp };
-        if (loaded.messaging.voice) config.messaging.voice = { ...config.messaging.voice, ...loaded.messaging.voice };
+    const runtime = loadedRecord.runtime as Partial<TwinClawConfig['runtime']> | undefined;
+    const models = loadedRecord.models as Partial<TwinClawConfig['models']> | undefined;
+    const messaging = loadedRecord.messaging as Partial<TwinClawConfig['messaging']> | undefined;
+    const storage = loadedRecord.storage as Partial<TwinClawConfig['storage']> | undefined;
+    const integration = loadedRecord.integration as Partial<TwinClawConfig['integration']> | undefined;
+    const tools = loadedRecord.tools as Partial<TwinClawConfig['tools']> | undefined;
+
+    if (runtime) config.runtime = { ...config.runtime, ...runtime };
+    if (models) config.models = { ...config.models, ...models };
+    if (messaging) {
+        const telegram = messaging.telegram as Partial<TwinClawConfig['messaging']['telegram']> | undefined;
+        const whatsapp = messaging.whatsapp as Partial<TwinClawConfig['messaging']['whatsapp']> | undefined;
+        const voice = messaging.voice as Partial<TwinClawConfig['messaging']['voice']> | undefined;
+        const inbound = messaging.inbound as Partial<TwinClawConfig['messaging']['inbound']> | undefined;
+        const streaming = messaging.streaming as Partial<TwinClawConfig['messaging']['streaming']> | undefined;
+        if (telegram) config.messaging.telegram = { ...config.messaging.telegram, ...telegram };
+        if (whatsapp) config.messaging.whatsapp = { ...config.messaging.whatsapp, ...whatsapp };
+        if (voice) config.messaging.voice = { ...config.messaging.voice, ...voice };
+        if (inbound) config.messaging.inbound = { ...config.messaging.inbound, ...inbound };
+        if (streaming) config.messaging.streaming = { ...config.messaging.streaming, ...streaming };
     }
-    if (loaded.storage) config.storage = { ...config.storage, ...loaded.storage };
-    if (loaded.integration) config.integration = { ...config.integration, ...loaded.integration };
+    if (storage) config.storage = { ...config.storage, ...storage };
+    if (integration) config.integration = { ...config.integration, ...integration };
+    if (tools) {
+        config.tools = {
+            allow: Array.isArray(tools.allow)
+                ? tools.allow.filter((value): value is string => typeof value === 'string')
+                : config.tools.allow,
+            deny: Array.isArray(tools.deny)
+                ? tools.deny.filter((value): value is string => typeof value === 'string')
+                : config.tools.deny,
+        };
+    }
 
     return config;
 }
@@ -143,12 +220,16 @@ function mergeWithDefaults(loaded: any): TwinClawConfig {
 let cachedConfig: TwinClawConfig | null = null;
 const legacyWarningEmitted = new Set<string>();
 
+export function clearConfigCacheForTests(): void {
+    cachedConfig = null;
+    legacyWarningEmitted.clear();
+}
+
 export function reloadConfigSync(): void {
     const configPath = getConfigPath();
     try {
-        const fsSync = require('fs');
-        if (fsSync.existsSync(configPath)) {
-            const content = fsSync.readFileSync(configPath, 'utf8');
+        if (existsSync(configPath)) {
+            const content = readFileSync(configPath, 'utf8');
             cachedConfig = mergeWithDefaults(JSON.parse(content));
             return;
         }
@@ -166,9 +247,10 @@ export function getConfigValue(key: string, sensitive: boolean = false): string 
         reloadConfigSync();
     }
     const config = cachedConfig!;
-    let jsonValue: any = undefined;
+    let jsonValue: unknown = undefined;
 
     switch (key) {
+        case 'API_SECRET': jsonValue = config.runtime.apiSecret; break;
         case 'API_PORT': jsonValue = config.runtime.apiPort; break;
         case 'SECRET_VAULT_REQUIRED': jsonValue = config.runtime.secretVaultRequired?.join(','); break;
         case 'LOCAL_STATE_SNAPSHOT_CRON': jsonValue = config.runtime.localStateSnapshotCron; break;
@@ -193,16 +275,33 @@ export function getConfigValue(key: string, sensitive: boolean = false): string 
         case 'EMBEDDING_MODEL': jsonValue = config.integration.embeddingModel; break;
         case 'OLLAMA_BASE_URL': jsonValue = config.integration.ollamaBaseUrl; break;
         case 'OLLAMA_EMBEDDING_MODEL': jsonValue = config.integration.ollamaEmbeddingModel; break;
+        case 'TOOLS_ALLOW': jsonValue = config.tools.allow?.join(','); break;
+        case 'TOOLS_DENY': jsonValue = config.tools.deny?.join(','); break;
+
+        case 'INBOUND_DEBOUNCE_ENABLED': jsonValue = config.messaging.inbound.enabled; break;
+        case 'INBOUND_DEBOUNCE_MS': jsonValue = config.messaging.inbound.debounceMs; break;
+        case 'BLOCK_STREAMING_DEFAULT': jsonValue = config.messaging.streaming.blockStreamingDefault; break;
+        case 'BLOCK_STREAMING_BREAK': jsonValue = config.messaging.streaming.blockStreamingBreak; break;
+        case 'BLOCK_STREAMING_MIN_CHARS': jsonValue = config.messaging.streaming.blockStreamingMinChars; break;
+        case 'BLOCK_STREAMING_MAX_CHARS': jsonValue = config.messaging.streaming.blockStreamingMaxChars; break;
+        case 'BLOCK_STREAMING_COALESCE': jsonValue = config.messaging.streaming.blockStreamingCoalesce; break;
+        case 'HUMAN_DELAY_MS': jsonValue = config.messaging.streaming.humanDelayMs; break;
     }
 
+    // 1. Process explicit environment variables that act as overrides
+    if (isAllowedOverride(key) && process.env[key] !== undefined && String(process.env[key]).trim() !== '') {
+        return String(process.env[key]);
+    }
+
+    // 2. Return the parsed config value (which merges twinclaw.json with defaults)
     if (jsonValue !== undefined && jsonValue !== null && String(jsonValue).trim() !== '') {
         return String(jsonValue);
     }
 
-    // Fallback to process.env
+    // 3. Fallback to process.env for legacy non-overrides, emitting a deprecation warning
     const envValue = process.env[key];
     if (envValue !== undefined && envValue !== null && String(envValue).trim() !== '') {
-        if (!sensitive && !isAllowedOverride(key) && !legacyWarningEmitted.has(key)) {
+        if (!sensitive && !legacyWarningEmitted.has(key)) {
             console.warn(`[TwinClaw Config Migration] Deprecation Warning: Loaded configuration key '${key}' from process.env (or .env). Please re-run 'twinclaw onboard' or generate a twinclaw.json file.`);
             legacyWarningEmitted.add(key);
         }
@@ -215,15 +314,52 @@ export function getConfigValue(key: string, sensitive: boolean = false): string 
 function isAllowedOverride(key: string): boolean {
     return [
         'TWINCLAW_CONFIG_PATH',
+        'TWINCLAW_PROFILE',
         'RUNTIME_BUDGET_DEFAULT_PROFILE',
         'RUNTIME_BUDGET_PREFER_LOCAL_MODEL',
         'RUNTIME_BUDGET_LOCAL_MODEL_ID',
         'API_PORT',
         'LOCAL_STATE_SNAPSHOT_CRON',
         'INCIDENT_POLL_CRON',
+        'TOOLS_ALLOW',
+        'TOOLS_DENY',
         'NODE_ENV',
         'SECRET_VAULT_MASTER_KEY',
         'API_SECRET',
         'MODEL_ROUTING_FALLBACK_MODE'
     ].includes(key);
 }
+
+// ── Workspace Migration ──────────────────────────────────────────────────────
+
+export interface WorkspaceMigrationResult {
+    migrated: boolean;
+    sourcePath: string | null;
+    targetPath: string | null;
+    error?: string;
+}
+
+let migrationPerformed = false;
+
+export function checkAndMigrateWorkspace(): WorkspaceMigrationResult {
+    if (migrationPerformed) {
+        return { migrated: false, sourcePath: null, targetPath: null };
+    }
+    
+    migrationPerformed = true;
+    
+    if (hasLegacyConfig()) {
+        console.log('[TwinClaw] Detected legacy ~/.twinclaw configuration. Migrating to workspace structure...');
+        const result = migrateLegacyConfig();
+        if (result.migrated) {
+            console.log(`[TwinClaw] Successfully migrated config to ${result.targetPath}`);
+        } else if (result.error) {
+            console.error(`[TwinClaw] Migration failed: ${result.error}`);
+        }
+        return result;
+    }
+    
+    return { migrated: false, sourcePath: null, targetPath: null };
+}
+
+export { hasLegacyConfig, migrateLegacyConfig };
