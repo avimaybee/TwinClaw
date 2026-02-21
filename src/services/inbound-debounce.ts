@@ -9,7 +9,7 @@ export interface InboundDebounceOptions {
 interface PendingMessage {
     message: InboundMessage;
     timer: NodeJS.Timeout;
-    resolve: (message: InboundMessage) => void;
+    resolvers: ((message: InboundMessage) => void)[];
     texts: string[];
 }
 
@@ -50,14 +50,14 @@ export class InboundDebounceService {
                 if (message.text) {
                     existing.texts.push(message.text);
                 }
-                existing.resolve = resolve;
+                existing.resolvers.push(resolve);
                 existing.timer = this.#scheduleFlush(key);
             } else {
                 const texts = message.text ? [message.text] : [];
                 const pending: PendingMessage = {
                     message,
                     timer: this.#scheduleFlush(key),
-                    resolve,
+                    resolvers: [resolve],
                     texts,
                 };
                 this.#pending.set(key, pending);
@@ -72,6 +72,9 @@ export class InboundDebounceService {
             const merged = this.#mergeMessages(pending);
             messages.push(merged);
             this.#pending.delete(key);
+            for (const resolve of pending.resolvers) {
+                resolve(merged);
+            }
         }
         return messages;
     }
@@ -103,7 +106,9 @@ export class InboundDebounceService {
 
         this.#pending.delete(key);
         const merged = this.#mergeMessages(pending);
-        pending.resolve(merged);
+        for (const resolve of pending.resolvers) {
+            resolve(merged);
+        }
     }
 
     #mergeMessages(pending: PendingMessage): InboundMessage {
