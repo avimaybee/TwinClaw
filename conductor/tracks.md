@@ -111,45 +111,46 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track 56: Gateway Supervision & Remote Access Integration**
   *Link: [./archive/gateway_supervision_remote_access_20260221/](./archive/gateway_supervision_remote_access_20260221/)*
 
----
-
-- [x] **Track 47: Runtime Config Migration & dotenv-vault Decommission**
-  *Link: [./archive/runtime_env_migration_20260221/](./archive/runtime_env_migration_20260221/)*
-
----
-
-## Active Tracks
-
 - [x] **Track 53: TwinClaw Workspace & Profile Alignment**
-  *Link: [./tracks/twinclaw_workspace_alignment_20260221/](./tracks/twinclaw_workspace_alignment_20260221/)*
+  *Link: [./archive/twinclaw_workspace_alignment_20260221/](./archive/twinclaw_workspace_alignment_20260221/)*
 
 - [x] **Track 54: Message Streaming, Chunking, & Queueing Adoption**
   *Link: [./archive/message_streaming_chunking_20260221/](./archive/message_streaming_chunking_20260221/)*
 
 - [x] **Track 55: Native Tool Inventory & MCP Harmonization**
-  *Link: [./tracks/tool_inventory_mcp_harmonization_20260221/](./tracks/tool_inventory_mcp_harmonization_20260221/)*
+  *Link: [./archive/tool_inventory_mcp_harmonization_20260221/](./archive/tool_inventory_mcp_harmonization_20260221/)*
 
-- [~] **Track 57: Secrets Hygiene & Credential Rotation Sweep**
-  *Link: [./tracks/secrets_hygiene_rotation_20260221/](./tracks/secrets_hygiene_rotation_20260221/)*
+- [x] **Track 62: Type-Safety & Reliability Stabilization**
+  *Link: [./archive/type_safety_reliability_stabilization_20260221/](./archive/type_safety_reliability_stabilization_20260221/)*
 
-- [ ] **Track 58: MVP Gate v2 (Deep Config/Vault Validation)**
-  *Link: [./tracks/mvp_gate_v2_validation_20260221/](./tracks/mvp_gate_v2_validation_20260221/)*
+- [x] **Track 57: Secrets Hygiene & Credential Rotation Sweep**
+  *Link: [./archive/secrets_hygiene_rotation_20260221/](./archive/secrets_hygiene_rotation_20260221/)*
 
-- [ ] **Track 59: CI Release Gate Enforcement**
-  *Link: [./tracks/ci_release_gate_enforcement_20260221/](./tracks/ci_release_gate_enforcement_20260221/)*
+- [x] **Track 58: MVP Gate v2 (Deep Config/Vault Validation)**
+  *Link: [./archive/mvp_gate_v2_validation_20260221/](./archive/mvp_gate_v2_validation_20260221/)*
 
-- [ ] **Track 60: API Health as Default Hard Gate**
-  *Link: [./tracks/api_health_hard_gate_20260221/](./tracks/api_health_hard_gate_20260221/)*
+- [x] **Track 59: CI Release Gate Enforcement**
+  *Link: [./archive/ci_release_gate_enforcement_20260221/](./archive/ci_release_gate_enforcement_20260221/)*
 
-- [ ] **Track 61: Release/Rollback Drill Automation**
-  *Link: [./tracks/release_rollback_drill_20260221/](./tracks/release_rollback_drill_20260221/)*
+- [x] **Track 60: API Health as Default Hard Gate**
+  *Link: [./archive/api_health_hard_gate_20260221/](./archive/api_health_hard_gate_20260221/)*
 
-- [ ] **Track 62: Type-Safety & Reliability Stabilization**
-  *Link: [./tracks/type_safety_reliability_stabilization_20260221/](./tracks/type_safety_reliability_stabilization_20260221/)*
+- [x] **Track 61: Release/Rollback Drill Automation**
+  *Link: [./archive/release_rollback_drill_20260221/](./archive/release_rollback_drill_20260221/)*
 
-- [ ] **Track 63: Identity Bootstrap Compliance**
-  *Link: [./tracks/identity_bootstrap_compliance_20260221/](./tracks/identity_bootstrap_compliance_20260221/)*
+- [x] **Track 63: Identity Bootstrap Compliance**
+  *Link: [./archive/identity_bootstrap_compliance_20260221/](./archive/identity_bootstrap_compliance_20260221/)*
 
-- [~] **Track 64: Docs & Track-State Reconciliation**
-  *Link: [./tracks/docs_track_state_reconciliation_20260221/](./tracks/docs_track_state_reconciliation_20260221/)*
+- [x] **Track 64: Docs & Track-State Reconciliation**
+  *Link: [./archive/docs_track_state_reconciliation_20260221/](./archive/docs_track_state_reconciliation_20260221/)*
 
+---
+
+## Active Tracks
+
+- [~] **Track 65: Windows-Only Runtime & CLI Enforcement**
+  *Link: [./tracks/windows_runtime_cli_enforcement_20260221/](./tracks/windows_runtime_cli_enforcement_20260221/)*
+- [x] **Track 66: Windows-Only Documentation Alignment**
+  *Link: [./tracks/windows_docs_alignment_20260221/](./tracks/windows_docs_alignment_20260221/)*
+- [~] **Track 67: Windows CI Runner & PowerShell Pipeline Alignment**
+  *Link: [./tracks/windows_ci_powershell_alignment_20260221/](./tracks/windows_ci_powershell_alignment_20260221/)*

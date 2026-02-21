@@ -30,18 +30,18 @@ Before archiving a track, verify the following:
 
 Run this to detect drift between `tracks.md` and the filesystem:
 
-```bash
+```powershell
 # 1. List all track folder IDs referenced in tracks.md
-grep -oP '\./tracks/[^/]+' conductor/tracks.md | sort -u
+Select-String -Path "conductor/tracks.md" -Pattern '\./tracks/[^/]+' -AllMatches | ForEach-Object { $_.Matches.Value } | Sort-Object -Unique
 
 # 2. List all actual folders in conductor/tracks/
-ls conductor/tracks/
+Get-ChildItem -Path "conductor/tracks/" -Directory | Select-Object -ExpandProperty Name
 
 # 3. List all archive folder IDs referenced in tracks.md
-grep -oP '\./archive/[^/]+' conductor/tracks.md | sort -u
+Select-String -Path "conductor/tracks.md" -Pattern '\./archive/[^/]+' -AllMatches | ForEach-Object { $_.Matches.Value } | Sort-Object -Unique
 
 # 4. List all actual folders in conductor/archive/
-ls conductor/archive/
+Get-ChildItem -Path "conductor/archive/" -Directory | Select-Object -ExpandProperty Name
 ```
 
 **Check for:** References in `tracks.md` that don't have corresponding folders (broken links), and folders that aren't referenced in `tracks.md` (orphans).
@@ -52,16 +52,18 @@ ls conductor/archive/
 
 Verify every track folder has a `metadata.json`:
 
-```bash
+```powershell
 # Find archive tracks missing metadata.json
-for d in conductor/archive/*/; do
-  [ ! -f "$d/metadata.json" ] && echo "MISSING metadata: $d"
-done
+Get-ChildItem -Path "conductor/archive/" -Directory | ForEach-Object {
+    $meta = Join-Path $_.FullName "metadata.json"
+    if (-not (Test-Path $meta)) { Write-Host "MISSING metadata: $($_.Name)" -ForegroundColor Red }
+}
 
 # Find active tracks missing metadata.json
-for d in conductor/tracks/*/; do
-  [ ! -f "$d/metadata.json" ] && echo "MISSING metadata: $d"
-done
+Get-ChildItem -Path "conductor/tracks/" -Directory | ForEach-Object {
+    $meta = Join-Path $_.FullName "metadata.json"
+    if (-not (Test-Path $meta)) { Write-Host "MISSING metadata: $($_.Name)" -ForegroundColor Red }
+}
 ```
 
 ---
@@ -70,12 +72,18 @@ done
 
 Verify archived tracks have no incomplete plan items:
 
-```bash
+```powershell
 # Find archive tracks with unchecked items
-for d in conductor/archive/*/; do
-  count=$(grep -c '\- \[ \]' "$d/plan.md" 2>/dev/null || echo 0)
-  [ "$count" -gt 0 ] && echo "UNCHECKED ITEMS ($count): $d"
-done
+Get-ChildItem -Path "conductor/archive/" -Directory | ForEach-Object {
+    $plan = Join-Path $_.FullName "plan.md"
+    if (Test-Path $plan) {
+        $content = Get-Content $plan
+        $unchecked = $content | Select-String -Pattern '- \[ \]'
+        if ($unchecked) {
+            Write-Host "UNCHECKED ITEMS ($($unchecked.Count)): $($_.Name)" -ForegroundColor Yellow
+        }
+    }
+}
 ```
 
 ---
@@ -84,18 +92,28 @@ done
 
 Verify metadata statuses are consistent with their location:
 
-```bash
+```powershell
 # Archive tracks should all be "completed"
-for d in conductor/archive/*/; do
-  status=$(python3 -c "import json,sys; d=json.load(open('$d/metadata.json')); print(d['status'])" 2>/dev/null)
-  [ "$status" != "completed" ] && echo "WRONG STATUS ($status): $d"
-done
+Get-ChildItem -Path "conductor/archive/" -Directory | ForEach-Object {
+    $metaPath = Join-Path $_.FullName "metadata.json"
+    if (Test-Path $metaPath) {
+        $meta = Get-Content $metaPath | ConvertFrom-Json
+        if ($meta.status -ne "completed") {
+            Write-Host "WRONG STATUS ($($meta.status)): $($_.Name)" -ForegroundColor Red
+        }
+    }
+}
 
 # Active tracks should not be "completed" (if completed they should be archived)
-for d in conductor/tracks/*/; do
-  status=$(python3 -c "import json,sys; d=json.load(open('$d/metadata.json')); print(d['status'])" 2>/dev/null)
-  [ "$status" = "completed" ] && echo "COMPLETED BUT NOT ARCHIVED: $d"
-done
+Get-ChildItem -Path "conductor/tracks/" -Directory | ForEach-Object {
+    $metaPath = Join-Path $_.FullName "metadata.json"
+    if (Test-Path $metaPath) {
+        $meta = Get-Content $metaPath | ConvertFrom-Json
+        if ($meta.status -eq "completed") {
+            Write-Host "COMPLETED BUT NOT ARCHIVED: $($_.Name)" -ForegroundColor Yellow
+        }
+    }
+}
 ```
 
 ---

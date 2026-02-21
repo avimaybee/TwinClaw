@@ -1,0 +1,11 @@
+{
+  "id": "66",
+  "title": "Windows-Only Documentation Alignment",
+  "description": "Remove non-Windows guidance and standardize docs on PowerShell and Windows paths.",
+  "status": "completed",
+  "owner": "docs",
+  "priority": "high",
+  "created_at": "2026-02-21",
+  "updated_at": "2026-02-21T12:00:00Z",
+  "labels": ["windows", "docs", "runbooks"]
+}
