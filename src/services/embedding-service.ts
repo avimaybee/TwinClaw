@@ -1,4 +1,5 @@
 import { getSecretVaultService } from './secret-vault.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 type EmbeddingProvider = 'openai' | 'ollama';
 
@@ -23,7 +24,7 @@ export class EmbeddingService {
     private readonly expectedDimensions: number;
 
     constructor() {
-        const configuredDimensions = Number(process.env.MEMORY_EMBEDDING_DIM ?? '1536');
+        const configuredDimensions = Number(getConfigValue('MEMORY_EMBEDDING_DIM') ?? '1536');
         this.expectedDimensions = Number.isFinite(configuredDimensions) && configuredDimensions > 0
             ? configuredDimensions
             : 1536;
@@ -55,7 +56,7 @@ export class EmbeddingService {
     }
 
     private getProviderOrder(): EmbeddingProvider[] {
-        const configured = (process.env.EMBEDDING_PROVIDER ?? '').toLowerCase().trim();
+        const configured = (getConfigValue('EMBEDDING_PROVIDER') ?? '').toLowerCase().trim();
         if (configured === 'ollama') {
             return ['ollama', 'openai'];
         }
@@ -74,8 +75,8 @@ export class EmbeddingService {
             throw new Error('Missing EMBEDDING_API_KEY or OPENAI_API_KEY.');
         }
 
-        const endpoint = process.env.EMBEDDING_API_URL ?? DEFAULT_OPENAI_URL;
-        const model = process.env.EMBEDDING_MODEL ?? DEFAULT_OPENAI_MODEL;
+        const endpoint = getConfigValue('EMBEDDING_API_URL') ?? DEFAULT_OPENAI_URL;
+        const model = getConfigValue('EMBEDDING_MODEL') ?? DEFAULT_OPENAI_MODEL;
 
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -104,8 +105,8 @@ export class EmbeddingService {
     }
 
     private async embedWithOllama(input: string): Promise<number[]> {
-        const baseUrl = process.env.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_URL;
-        const model = process.env.OLLAMA_EMBEDDING_MODEL ?? DEFAULT_OLLAMA_MODEL;
+        const baseUrl = getConfigValue('OLLAMA_BASE_URL') ?? DEFAULT_OLLAMA_URL;
+        const model = getConfigValue('OLLAMA_EMBEDDING_MODEL') ?? DEFAULT_OLLAMA_MODEL;
         const endpoint = `${baseUrl.replace(/\/$/, '')}/api/embeddings`;
 
         const response = await fetch(endpoint, {

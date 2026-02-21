@@ -204,7 +204,7 @@ Development Workflow (skills.md & deployment.md):
 
 To avoid running the bot twice (which causes duplicate messages), instruct your AI agent on a strict staging workflow [33:47].
 
-Rule: Whenever making new changes, pause the Railway instance -> Run and test locally via a staging process -> Once perfected, push updates back to Railway and stop local hosting [33:57].
+**Rule:** Whenever making new changes, stop the local background service -> Run and test via the staging process (`twinclaw start`) -> Once perfected, restart the local service daemon.
 
 Step 6: Windows Native (Windows Daemon & System Tray)
 The goal of this phase is to turn TwinClaw into a core Windows utility that is always-on and easily accessible from the taskbar.

@@ -31,9 +31,10 @@ import type {
   RuntimeUsageStage,
 } from '../types/runtime-budget.js';
 import type { McpHealthMetrics } from '../types/mcp.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 const DB_PATH = path.resolve('memory/twinclaw.db');
-const MEMORY_EMBEDDING_DIM = Number(process.env.MEMORY_EMBEDDING_DIM ?? '1536') || 1536;
+const MEMORY_EMBEDDING_DIM = Number(getConfigValue('MEMORY_EMBEDDING_DIM') ?? '1536') || 1536;
 
 if (!fs.existsSync(path.dirname(DB_PATH))) {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });

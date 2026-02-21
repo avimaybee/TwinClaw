@@ -39,9 +39,16 @@ curl -fsSL https://twinclaw.ai/install.sh | bash
 When you first run TwinClaw, it will automatically start a **Guided Setup Wizard**. You don't need to manually create any `.env` files. The wizard will prompt you for:
 
 1.  **API Keys**: Groq, OpenRouter, Gemini, ElevenLabs.
-2.  **Messaging**: Telegram Bot Token and User ID.
+2.  **Messaging**: Telegram Bot Token and optional bootstrap allowlist IDs.
 3.  **Security**: Generates a master encryption key for your local vault.
 4.  **Skills**: Auto-registers built-in skills for immediate use.
+
+TwinClaw now defaults to `dmPolicy: "pairing"` for Telegram/WhatsApp DMs. Unknown senders receive a pairing code and must be explicitly approved:
+
+```bash
+node src/index.ts pairing list telegram
+node src/index.ts pairing approve telegram <CODE>
+```
 
 ---
 

@@ -73,7 +73,12 @@ function createDispatcher(): {
   } as unknown as QueueService;
 
   return {
-    dispatcher: new Dispatcher(telegram, undefined, stt, tts, gateway, queue),
+    dispatcher: new Dispatcher(telegram, undefined, stt, tts, gateway, queue, {
+      telegram: {
+        dmPolicy: 'allowlist',
+        allowFrom: ['42'],
+      },
+    }),
     telegram,
     queueEnqueue,
     gatewayProcess,

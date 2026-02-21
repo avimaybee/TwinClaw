@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import os from 'node:os';
+import path from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { Dispatcher } from '../../src/interfaces/dispatcher.js';
 import type { TelegramHandler } from '../../src/interfaces/telegram_handler.js';
 import type { WhatsAppHandler } from '../../src/interfaces/whatsapp_handler.js';
@@ -7,6 +10,7 @@ import type { TtsService } from '../../src/services/tts-service.js';
 import type { GatewayHandler } from '../../src/types/messaging.js';
 import type { QueueService } from '../../src/services/queue-service.js';
 import type { InboundMessage } from '../../src/types/messaging.js';
+import { DmPairingService, type DmPolicy } from '../../src/services/dm-pairing.js';
 
 vi.mock('../../src/utils/logger.js', () => ({
   logThought: vi.fn().mockResolvedValue(undefined),
@@ -115,11 +119,60 @@ describe('Dispatcher — messaging and voice dispatch paths', () => {
     // Queue was not called because the whole handle() caught the error before dispatch
     expect(queueEnqueue).not.toHaveBeenCalled();
   });
+
+  it('blocks unknown sender until pairing approval is completed', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'twinclaw-dispatcher-pairing-'));
+
+    try {
+      const pairingService = new DmPairingService({ credentialsDir: tempDir });
+      const { telegram, gateway, queueEnqueue } = buildDispatcher({
+        pairingService,
+        telegramDmPolicy: 'pairing',
+        telegramAllowFrom: [],
+      });
+
+      const inbound: InboundMessage = {
+        platform: 'telegram',
+        senderId: '321',
+        chatId: 321,
+        text: 'hello from unknown sender',
+        rawPayload: {},
+      };
+
+      await telegram.onMessage?.(inbound);
+
+      expect(gateway.processMessage).not.toHaveBeenCalled();
+      expect(queueEnqueue).toHaveBeenCalledTimes(1);
+
+      const challengeText = String(queueEnqueue.mock.calls[0]?.[2] ?? '');
+      const pairingCode = challengeText.match(/[A-Z2-9]{8}/)?.[0];
+      expect(pairingCode).toBeDefined();
+
+      const approval = pairingService.approve('telegram', String(pairingCode));
+      expect(approval.status).toBe('approved');
+
+      queueEnqueue.mockClear();
+      await telegram.onMessage?.(inbound);
+
+      expect(gateway.processMessage).toHaveBeenCalledTimes(1);
+      expect(queueEnqueue).toHaveBeenCalledWith('telegram', 321, 'gateway-reply');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-function buildDispatcher(): {
+interface BuildDispatcherOptions {
+  pairingService?: DmPairingService;
+  telegramDmPolicy?: DmPolicy;
+  whatsappDmPolicy?: DmPolicy;
+  telegramAllowFrom?: string[];
+  whatsappAllowFrom?: string[];
+}
+
+function buildDispatcher(options: BuildDispatcherOptions = {}): {
   dispatcher: Dispatcher;
   telegram: TelegramHandler;
   whatsapp: WhatsAppHandler;
@@ -156,7 +209,17 @@ function buildDispatcher(): {
   const queueEnqueue = vi.fn<(platform: string, chatId: string | number, text: string) => void>();
   const queue = { enqueue: queueEnqueue } as unknown as QueueService;
 
-  const dispatcher = new Dispatcher(telegram, whatsapp, stt, tts, gateway, queue);
+  const dispatcher = new Dispatcher(telegram, whatsapp, stt, tts, gateway, queue, {
+    pairingService: options.pairingService,
+    telegram: {
+      dmPolicy: options.telegramDmPolicy ?? 'allowlist',
+      allowFrom: options.telegramAllowFrom ?? ['77', '42', '1', '5', '9999'],
+    },
+    whatsapp: {
+      dmPolicy: options.whatsappDmPolicy ?? 'allowlist',
+      allowFrom: options.whatsappAllowFrom ?? ['phone1234'],
+    },
+  });
 
   return { dispatcher, telegram, whatsapp, stt, tts, gateway, queueEnqueue };
 }

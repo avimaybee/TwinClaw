@@ -67,6 +67,19 @@ Use these signals before/after rollback:
 - Manifest diagnostics in `memory/release-pipeline/manifests/*.json`
 - Rollback audit events in `memory/release-pipeline/rollback-audit.log`
 
+DM pairing operations (Telegram/WhatsApp) during release validation:
+
+```bash
+node src/index.ts pairing list telegram
+node src/index.ts pairing list whatsapp
+node src/index.ts pairing approve <channel> <CODE>
+```
+
+Pairing notes:
+- Unknown DM senders are blocked from gateway processing until approved.
+- Pairing requests expire after one hour and are capped per channel.
+- Approved identities are stored under `memory/credentials/*-allowFrom.json`.
+
 Decision guide:
 - **Build/tests fail:** stop release, fix code regressions.
 - **Health probe fails pre-release:** investigate runtime readiness before deploy.

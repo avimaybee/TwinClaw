@@ -23,7 +23,7 @@ The implementation is divided into four distinct **Execution Streams**. Agents c
 *   **Phase A3: Memory Subsystem (Agent 1)**
     *   [ ] Install `better-sqlite3` and `sqlite-vec`. 
     *   [ ] Initialize the databases: `sessions`, `messages`, and the `vec0` virtual table for RAG.
-    *   [ ] Write the utility script that embeds conversational chunks into Pinecone/SQLite upon receipt of a new message.
+    *   [ ] Write the utility script that embeds conversational chunks into local SQLite (`sqlite-vec`) upon receipt of a new message.
 
 ---
 
@@ -70,10 +70,10 @@ The implementation is divided into four distinct **Execution Streams**. Agents c
     *   [ ] Install `playwright-core`.
     *   [ ] Generate server endpoints (`POST /browser/snapshot`, `POST /browser/click`) that output Accessibility Trees or Screenshots to the LLM context.
     *   [ ] Map standard LLM tool calls (like "Click Element 12") to actual Playwright executions.
-*   **Phase D2: Staging Workflow & Railway Deployment (Agent 4)**
-    *   [ ] Document the staging sequence: *Local Code Edit -> Local Docker Run -> Test via Telegram -> Push to Production.*
-    *   [ ] Install Railway CLI and write the deployment configuration (`railway.json`).
-    *   [ ] Execute the final push to the isolated Railway cloud container to achieve 24/7 uptime without local machine dependency.
+*   **Phase D2: Staging Workflow & Service Deployment (Agent 4)**
+    *   [ ] Document the staging sequence: *Local Code Edit -> Local Docker Run -> Test via Telegram -> Deploy as Service.*
+    *   [ ] Configure the local service installer (`twinclaw onboard --install-daemon`) and verify background execution.
+    *   [ ] Execute the final service restart to achieve 24/7 uptime on the host machine.
 
 ---
 

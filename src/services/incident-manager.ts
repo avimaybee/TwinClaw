@@ -23,6 +23,7 @@ import {
   type IncidentTimelineRow,
 } from './db.js';
 import { logThought } from '../utils/logger.js';
+import { getConfigValue } from '../config/config-loader.js';
 
 const INCIDENT_JOB_ID = 'incident-self-healing';
 
@@ -121,7 +122,7 @@ export class IncidentManager {
     this.#config = {
       pollCronExpression:
         deps.config?.pollCronExpression ??
-        process.env.INCIDENT_POLL_CRON ??
+        getConfigValue('INCIDENT_POLL_CRON') ??
         DEFAULT_CONFIG.pollCronExpression,
       queueDepthThreshold:
         deps.config?.queueDepthThreshold ??
@@ -653,7 +654,7 @@ export class IncidentManager {
 }
 
 function readNumberEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = getConfigValue(name);
   if (!raw) {
     return fallback;
   }

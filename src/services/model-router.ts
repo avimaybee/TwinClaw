@@ -423,7 +423,7 @@ export class ModelRouter {
       return persisted;
     }
 
-    const fromEnv = getConfigValue('MODEL_ROUTING_FALLBACK_MODE');
+    const fromEnv = process.env.MODEL_ROUTING_FALLBACK_MODE;
     const resolved = isFallbackMode(fromEnv) ? fromEnv : DEFAULT_FALLBACK_MODE;
     this.persistFallbackMode(resolved);
     return resolved;

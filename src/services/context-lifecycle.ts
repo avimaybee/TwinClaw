@@ -1,4 +1,5 @@
 import type { Message } from '../core/types.js';
+import { getConfigValue } from '../config/config-loader.js';
 import type {
   ContextBudgetConfig,
   ContextHistoryPlan,
@@ -397,7 +398,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = getConfigValue(name);
   if (!raw) {
     return fallback;
   }
