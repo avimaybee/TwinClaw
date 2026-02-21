@@ -1,0 +1,8 @@
+{
+  "track_id": "config_env_validation_20260220",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-02-20T17:17:40Z",
+  "updated_at": "2026-02-20T17:17:40Z",
+  "description": "Standardize runtime environment and secret validation across setup, startup, and diagnostics flows."
+}

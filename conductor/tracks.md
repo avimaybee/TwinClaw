@@ -60,6 +60,8 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/skill_packaging_versioning_20260220/](./archive/skill_packaging_versioning_20260220/)*
 - [x] **Track 27: Incident Detection, Auto-Remediation & Operator Escalation**
   *Link: [./archive/incident_self_healing_20260220/](./archive/incident_self_healing_20260220/)*
+- [x] **Track 28: Control Plane WebSocket Handshake & Real-Time Runtime Streaming**
+  *Link: [./archive/control_plane_websocket_streaming_20260220/](./archive/control_plane_websocket_streaming_20260220/)*
 - [x] **Track 29: Runtime Economics, Budget Guardrails & Adaptive Quality Profiles**
   *Link: [./archive/runtime_budget_governance_20260220/](./archive/runtime_budget_governance_20260220/)*
 - [x] **Track 30: Model Usage Telemetry, Cooldown Visibility & Fallback Mode Controls**
@@ -78,31 +80,23 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./archive/test_fk_unblock_20260220/](./archive/test_fk_unblock_20260220/)*
 - [x] **Track 37: Type Safety Debt Burn-Down (Strict TS Compliance)**
   *Link: [./archive/type_safety_debt_20260220/](./archive/type_safety_debt_20260220/)*
+- [x] **Track 38: NPM Command Reliability Matrix & Script Repair**
+  *Link: [./archive/npm_command_reliability_20260220/](./archive/npm_command_reliability_20260220/)*
+- [x] **Track 39: Installation & Bootstrap Fast-Path Hardening**
+  *Link: [./archive/install_bootstrap_fastpath_20260220/](./archive/install_bootstrap_fastpath_20260220/)*
+- [x] **Track 40: Configuration & Environment Validation Framework**
+  *Link: [./archive/config_env_validation_20260220/](./archive/config_env_validation_20260220/)*
+- [x] **Track 41: Runtime Health, Doctor & Readiness Surfaces**
+  *Link: [./archive/runtime_health_doctor_20260220/](./archive/runtime_health_doctor_20260220/)*
 - [x] **Track 42: Conductor Track Status Reconciliation & Recovery**
   *Link: [./archive/track_status_reconciliation_20260220/](./archive/track_status_reconciliation_20260220/)*
+- [x] **Track 43: Coverage Gap Closure for Messaging/MCP/Proactive/Observability**
+  *Link: [./archive/coverage_gap_expansion_20260220/](./archive/coverage_gap_expansion_20260220/)*
+- [x] **Track 44: MVP Smoke Validation & Release Gate**
+  *Link: [./archive/mvp_smoke_release_gate_20260220/](./archive/mvp_smoke_release_gate_20260220/)*
 
 ---
 
 ## Active Tracks
 
-- [ ] **Track 28: Control Plane WebSocket Handshake & Real-Time Runtime Streaming**
-  *Link: [./tracks/control_plane_websocket_streaming_20260220/](./tracks/control_plane_websocket_streaming_20260220/)*
-  *Assignee: Agent 5*
-- [ ] **Track 38: NPM Command Reliability Matrix & Script Repair**
-  *Link: [./tracks/npm_command_reliability_20260220/](./tracks/npm_command_reliability_20260220/)*
-  *Assignee: Agent 9*
-- [ ] **Track 39: Installation & Bootstrap Fast-Path Hardening**
-  *Link: [./tracks/install_bootstrap_fastpath_20260220/](./tracks/install_bootstrap_fastpath_20260220/)*
-  *Assignee: Agent 10*
-- [ ] **Track 40: Configuration & Environment Validation Framework**
-  *Link: [./tracks/config_env_validation_20260220/](./tracks/config_env_validation_20260220/)*
-  *Assignee: Agent 11*
-- [ ] **Track 41: Runtime Health, Doctor & Readiness Surfaces**
-  *Link: [./tracks/runtime_health_doctor_20260220/](./tracks/runtime_health_doctor_20260220/)*
-  *Assignee: Agent 12*
-- [ ] **Track 43: Coverage Gap Closure for Messaging/MCP/Proactive/Observability**
-  *Link: [./tracks/coverage_gap_expansion_20260220/](./tracks/coverage_gap_expansion_20260220/)*
-  *Assignee: Agent 14*
-- [ ] **Track 44: MVP Smoke Validation & Release Gate**
-  *Link: [./tracks/mvp_smoke_release_gate_20260220/](./tracks/mvp_smoke_release_gate_20260220/)*
-  *Assignee: Agent 15*
+- [ ] **No active tracks. Project is currently in maintenance/release-ready state.**
