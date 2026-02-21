@@ -10,8 +10,8 @@
 - [x] Task: Convert summary and failure steps to PowerShell syntax.
 
 ## Phase 3: Verification
-- [x] Task: Validate workflow file for Linux/macOS runner references and bash-only syntax.
-- [ ] Task: Execute workflow run in GitHub Actions to confirm expected gate behavior.
+- [x] Task: Execute workflow run in GitHub Actions to confirm expected gate behavior.
+
 
 ## Progress Notes
 - Workflow now targets Windows with PowerShell-native scripts.
