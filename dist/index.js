@@ -34,6 +34,14 @@ import { getDmPairingService } from './services/dm-pairing.js';
 import { randomUUID } from 'node:crypto';
 const secretVault = getSecretVaultService();
 const pairingService = getDmPairingService();
+function assertWindowsOnlyRuntime() {
+    if (process.platform === 'win32') {
+        return;
+    }
+    console.error(`[TwinClaw] Windows-only runtime: detected unsupported platform '${process.platform}'.`);
+    process.exit(1);
+}
+assertWindowsOnlyRuntime();
 // ── Early one-shot CLI commands (bypass service startup) ─────────────────────
 if (handleHelpCli(process.argv.slice(2))) {
     process.exit(process.exitCode ?? 0);
