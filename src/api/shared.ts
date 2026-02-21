@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import type { IncomingMessage } from 'node:http';
 import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { ApiEnvelope } from '../types/api.js';
 import { logThought, scrubSensitiveText } from '../utils/logger.js';
@@ -54,8 +55,8 @@ function getSignaturePayloadCandidates(req: Request): string[] {
     return [...payloads];
 }
 
-export function setRawRequestBody(req: Request, buffer: Buffer): void {
-    (req as SignatureRequest).rawBody = buffer.toString('utf8');
+export function setRawRequestBody(req: IncomingMessage, buffer: Buffer): void {
+    (req as IncomingMessage & { rawBody?: string }).rawBody = buffer.toString('utf8');
 }
 
 // ── Response Helpers ────────────────────────────────────────────────────────
