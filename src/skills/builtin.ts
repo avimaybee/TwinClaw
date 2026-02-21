@@ -17,10 +17,6 @@ function resolveWorkspacePath(inputPath: string): string {
   return resolved;
 }
 
-function quoteShellArg(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
-}
-
 function buildReadFileSkill(): Skill {
   return {
     name: 'fs.read',
@@ -137,7 +133,8 @@ function buildApplyPatchSkill(): Skill {
       try {
         await writeFile(tempPatchPath, patchValue, 'utf8');
         const result = await executeShell(
-          `git apply --whitespace=nowarn ${quoteShellArg(tempPatchPath)}`,
+          'git',
+          ['apply', '--whitespace=nowarn', tempPatchPath],
           process.env.TWINCLAW_SAFE_CWD || process.cwd(),
           { timeoutMs: 20_000 },
         );
@@ -158,13 +155,12 @@ function buildApplyPatchSkill(): Skill {
   };
 }
 
-function resolveShellOptions(input: Record<string, unknown>): { timeoutMs?: number; allowUnsafe?: boolean } {
+function resolveShellOptions(input: Record<string, unknown>): { timeoutMs?: number } {
   const timeoutMs =
     typeof input.timeoutMs === 'number' && Number.isFinite(input.timeoutMs)
       ? Math.floor(input.timeoutMs)
       : undefined;
-  const allowUnsafe = input.allowUnsafe === true;
-  return { timeoutMs, allowUnsafe };
+  return { timeoutMs };
 }
 
 function buildRuntimeExecSkill(): Skill {
@@ -179,7 +175,6 @@ function buildRuntimeExecSkill(): Skill {
         command: { type: 'string' },
         cwd: { type: 'string' },
         timeoutMs: { type: 'number' },
-        allowUnsafe: { type: 'boolean' },
       },
       required: ['command'],
     },
@@ -189,7 +184,10 @@ function buildRuntimeExecSkill(): Skill {
         return { ok: false, output: 'command must be a non-empty string.' };
       }
       const cwd = typeof input.cwd === 'string' ? resolveWorkspacePath(input.cwd) : undefined;
-      const result = await executeShell(commandValue, cwd, resolveShellOptions(input));
+      const result = await executeShell(commandValue, [], cwd, {
+        ...resolveShellOptions(input),
+        shell: true,
+      });
       await logToolCall('runtime.exec', input, result.output || '(no output)');
 
       return {
@@ -211,7 +209,6 @@ function buildRuntimePowerShellSkill(): Skill {
         script: { type: 'string' },
         cwd: { type: 'string' },
         timeoutMs: { type: 'number' },
-        allowUnsafe: { type: 'boolean' },
       },
       required: ['script'],
     },
@@ -221,8 +218,12 @@ function buildRuntimePowerShellSkill(): Skill {
         return { ok: false, output: 'script must be a non-empty string.' };
       }
       const cwd = typeof input.cwd === 'string' ? resolveWorkspacePath(input.cwd) : undefined;
-      const command = `powershell -NoProfile -ExecutionPolicy Bypass -Command ${quoteShellArg(scriptValue)}`;
-      const result = await executeShell(command, cwd, resolveShellOptions(input));
+      const result = await executeShell(
+        'powershell',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', scriptValue],
+        cwd,
+        resolveShellOptions(input),
+      );
       await logToolCall('runtime.powershell', input, result.output || '(no output)');
       return {
         ok: result.ok,
@@ -244,7 +245,6 @@ function buildRuntimeProcessSkill(): Skill {
         args: { type: 'array', items: { type: 'string' } },
         cwd: { type: 'string' },
         timeoutMs: { type: 'number' },
-        allowUnsafe: { type: 'boolean' },
       },
       required: ['executable'],
     },
@@ -257,9 +257,8 @@ function buildRuntimeProcessSkill(): Skill {
       const argsValue = Array.isArray(input.args)
         ? input.args.filter((arg): arg is string => typeof arg === 'string')
         : [];
-      const command = [quoteShellArg(executableValue), ...argsValue.map(quoteShellArg)].join(' ');
       const cwd = typeof input.cwd === 'string' ? resolveWorkspacePath(input.cwd) : undefined;
-      const result = await executeShell(command, cwd, resolveShellOptions(input));
+      const result = await executeShell(executableValue, argsValue, cwd, resolveShellOptions(input));
       await logToolCall('runtime.process', input, result.output || '(no output)');
       return {
         ok: result.ok,
