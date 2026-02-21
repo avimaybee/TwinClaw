@@ -1,0 +1,135 @@
+name: CI Release Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  mvp-gate:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type check
+        run: npm run check
+
+      - name: Run MVP Gate (CI mode)
+        id: mvp-gate
+        shell: pwsh
+        run: |
+          npm run mvp:gate -- --ci *> mvp-gate-output.txt
+          $exitCode = $LASTEXITCODE
+          "exit_code=$exitCode" >> $env:GITHUB_OUTPUT
+          Get-Content mvp-gate-output.txt
+          exit 0
+
+      - name: Parse gate verdict
+        id: parse-verdict
+        shell: pwsh
+        run: |
+          function Set-Output {
+            param(
+              [string]$Key,
+              [string]$Value
+            )
+            "$Key=$($Value -replace '[\r\n]+', ' ')" >> $env:GITHUB_OUTPUT
+          }
+
+          $latestPath = 'memory/mvp-gate/reports/latest.json'
+          if (-not (Test-Path $latestPath)) {
+            Set-Output 'verdict' 'unknown'
+            Set-Output 'summary' 'No MVP gate report generated.'
+            Set-Output 'failed_count' '0'
+            Set-Output 'report_path' ''
+            exit 0
+          }
+
+          $latest = Get-Content $latestPath -Raw | ConvertFrom-Json
+          $reportPath = if ($null -ne $latest.reportPath) { [string]$latest.reportPath } else { '' }
+          if ([string]::IsNullOrWhiteSpace($reportPath) -or -not (Test-Path $reportPath)) {
+            Set-Output 'verdict' 'unknown'
+            Set-Output 'summary' 'latest.json exists but referenced report is missing.'
+            Set-Output 'failed_count' '0'
+            Set-Output 'report_path' $reportPath
+            exit 0
+          }
+
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          $verdict = if ([string]::IsNullOrWhiteSpace([string]$report.verdict)) { 'unknown' } else { [string]$report.verdict }
+          $summary = if ([string]::IsNullOrWhiteSpace([string]$report.summary)) { 'No summary' } else { [string]$report.summary }
+          $failedCount = 0
+          if ($null -ne $report.failedHardGates) {
+            if ($report.failedHardGates -is [array]) {
+              $failedCount = $report.failedHardGates.Count
+            } else {
+              $failedCount = 1
+            }
+          }
+
+          Set-Output 'verdict' $verdict
+          Set-Output 'summary' $summary
+          Set-Output 'failed_count' ([string]$failedCount)
+          Set-Output 'report_path' $reportPath
+
+      - name: Upload MVP Gate Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvp-gate-report
+          path: |
+            memory/mvp-gate/reports/*.json
+            memory/mvp-gate/reports/*.md
+            mvp-gate-output.txt
+          retention-days: 30
+
+      - name: Publish gate summary
+        if: always()
+        shell: pwsh
+        run: |
+          $verdict = "${{ steps.parse-verdict.outputs.verdict }}"
+          $summary = "${{ steps.parse-verdict.outputs.summary }}"
+          $failedCount = "${{ steps.parse-verdict.outputs.failed_count }}"
+          $reportPath = "${{ steps.parse-verdict.outputs.report_path }}"
+
+          $lines = @(
+            "## MVP Gate Results",
+            "",
+            "- Verdict: **$verdict**",
+            "- Failed hard gates: **$failedCount**",
+            "- Summary: $summary"
+          )
+
+          if (-not [string]::IsNullOrWhiteSpace($reportPath)) {
+            $lines += "- Report path: $reportPath"
+          }
+          $lines += ""
+          $lines += "Full JSON/Markdown artifacts were uploaded in this workflow run."
+
+          ($lines -join "`n") | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Fail if verdict is not go
+        if: steps.parse-verdict.outputs.verdict != 'go'
+        shell: pwsh
+        run: |
+          Write-Output "❌ MVP Gate verdict is '${{ steps.parse-verdict.outputs.verdict }}' (expected 'go')."
+          exit 1
+
+      - name: Fail if command exited non-zero
+        if: steps.mvp-gate.outputs.exit_code != '0'
+        shell: pwsh
+        run: |
+          Write-Output "❌ MVP Gate command exited with code ${{ steps.mvp-gate.outputs.exit_code }}."
+          exit 1
