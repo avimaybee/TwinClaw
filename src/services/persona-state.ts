@@ -140,41 +140,48 @@ export class PersonaStateService {
       };
     }
 
-    const plans: PersonaWritePlan[] = [];
     const warnings: string[] = [];
 
-    for (const key of changedDocuments) {
-      const targetPath = this.#documentPath(key);
-      const tempPath = `${targetPath}.tmp-${randomUUID()}`;
-      const backupPath = `${targetPath}.bak-${randomUUID()}`;
+    const plans: PersonaWritePlan[] = await Promise.all(
+      changedDocuments.map(async (key) => {
+        const targetPath = this.#documentPath(key);
+        const tempPath = `${targetPath}.tmp-${randomUUID()}`;
+        const backupPath = `${targetPath}.bak-${randomUUID()}`;
 
-      await this.#fs.writeFile(tempPath, nextState[key], 'utf8');
-      const hadOriginal = await this.#fileExists(targetPath);
-      if (hadOriginal) {
-        await this.#fs.copyFile(targetPath, backupPath);
-      }
+        const hadOriginal = await this.#fileExists(targetPath);
+        const preparationTasks: Promise<void>[] = [this.#fs.writeFile(tempPath, nextState[key], 'utf8')];
 
-      plans.push({
-        key,
-        targetPath,
-        tempPath,
-        backupPath,
-        hadOriginal,
-        applied: false,
-        originalRemoved: false,
-      });
-    }
+        if (hadOriginal) {
+          preparationTasks.push(this.#fs.copyFile(targetPath, backupPath));
+        }
+
+        await Promise.all(preparationTasks);
+
+        return {
+          key,
+          targetPath,
+          tempPath,
+          backupPath,
+          hadOriginal,
+          applied: false,
+          originalRemoved: false,
+        };
+      }),
+    );
 
     try {
-      for (const plan of plans) {
-        await this.#removePathIfExists(plan.targetPath);
-        plan.originalRemoved = true;
-        await this.#fs.rename(plan.tempPath, plan.targetPath);
-        plan.applied = true;
-      }
+      await Promise.all(
+        plans.map(async (plan) => {
+          await this.#removePathIfExists(plan.targetPath);
+          plan.originalRemoved = true;
+          await this.#fs.rename(plan.tempPath, plan.targetPath);
+          plan.applied = true;
+        }),
+      );
 
-      for (const plan of plans) {
-        warnings.push(...(await this.#cleanupPath(plan.backupPath)));
+      const cleanupResults = await Promise.all(plans.map((plan) => this.#cleanupPath(plan.backupPath)));
+      for (const result of cleanupResults) {
+        warnings.push(...result);
       }
 
       const updatedState = await this.getState();
@@ -201,9 +208,13 @@ export class PersonaStateService {
       );
       throw new Error(`Persona state update failed; rollback applied. ${errorMessage}${warningSuffix}`);
     } finally {
-      for (const plan of plans) {
-        warnings.push(...(await this.#cleanupPath(plan.tempPath)));
-        warnings.push(...(await this.#cleanupPath(plan.backupPath)));
+      const cleanupTasks = plans.flatMap((plan) => [
+        this.#cleanupPath(plan.tempPath),
+        this.#cleanupPath(plan.backupPath),
+      ]);
+      const cleanupResults = await Promise.all(cleanupTasks);
+      for (const result of cleanupResults) {
+        warnings.push(...result);
       }
     }
   }
