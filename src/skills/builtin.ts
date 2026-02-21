@@ -3,15 +3,11 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { Skill } from './types.js';
-import { executeShell } from './shell.js';
+import { executeProgram, executeShell } from './shell.js';
 import { logToolCall } from '../utils/logger.js';
 
 function resolveWorkspacePath(inputPath: string): string {
   return path.resolve(process.cwd(), inputPath);
-}
-
-function quoteShellArg(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
 }
 
 function buildReadFileSkill(): Skill {
@@ -129,8 +125,9 @@ function buildApplyPatchSkill(): Skill {
       const tempPatchPath = path.join(tmpdir(), `twinclaw-${randomUUID()}.patch`);
       try {
         await writeFile(tempPatchPath, patchValue, 'utf8');
-        const result = await executeShell(
-          `git apply --whitespace=nowarn ${quoteShellArg(tempPatchPath)}`,
+        const result = await executeProgram(
+          'git',
+          ['apply', '--whitespace=nowarn', tempPatchPath],
           process.cwd(),
           { timeoutMs: 20_000 },
         );
@@ -213,9 +210,19 @@ function buildRuntimePowerShellSkill(): Skill {
       if (typeof scriptValue !== 'string' || scriptValue.trim().length === 0) {
         return { ok: false, output: 'script must be a non-empty string.' };
       }
+      if (input.allowUnsafe !== true) {
+        return {
+          ok: false,
+          output: 'runtime.powershell is high-risk and requires allowUnsafe=true.',
+        };
+      }
       const cwd = typeof input.cwd === 'string' ? resolveWorkspacePath(input.cwd) : undefined;
-      const command = `powershell -NoProfile -ExecutionPolicy Bypass -Command ${quoteShellArg(scriptValue)}`;
-      const result = await executeShell(command, cwd, resolveShellOptions(input));
+      const result = await executeProgram(
+        'powershell',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', scriptValue],
+        cwd,
+        resolveShellOptions(input),
+      );
       await logToolCall('runtime.powershell', input, result.output || '(no output)');
       return {
         ok: result.ok,
@@ -229,7 +236,7 @@ function buildRuntimeProcessSkill(): Skill {
   return {
     name: 'runtime.process',
     group: 'group:runtime',
-    description: 'Execute an executable with argument array under shell safety constraints.',
+    description: 'Execute an executable + args under allowlist and timeout constraints.',
     parameters: {
       type: 'object',
       properties: {
@@ -250,9 +257,8 @@ function buildRuntimeProcessSkill(): Skill {
       const argsValue = Array.isArray(input.args)
         ? input.args.filter((arg): arg is string => typeof arg === 'string')
         : [];
-      const command = [quoteShellArg(executableValue), ...argsValue.map(quoteShellArg)].join(' ');
       const cwd = typeof input.cwd === 'string' ? resolveWorkspacePath(input.cwd) : undefined;
-      const result = await executeShell(command, cwd, resolveShellOptions(input));
+      const result = await executeProgram(executableValue, argsValue, cwd, resolveShellOptions(input));
       await logToolCall('runtime.process', input, result.output || '(no output)');
       return {
         ok: result.ok,

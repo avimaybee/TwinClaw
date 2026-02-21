@@ -12,12 +12,16 @@ async function runWhatsappLogin(): Promise<void> {
     console.log('[TwinClaw Channels] Starting WhatsApp login sequence...');
     console.log('Initializing secure browser environment...');
 
-    const client = new Client({
+    const disableChromiumSandbox = process.env.WHATSAPP_DISABLE_CHROMIUM_SANDBOX === 'true';
+    const clientConfig: WAWebJS.ClientOptions = {
         authStrategy: new LocalAuth({ dataPath: './memory/whatsapp_auth' }),
-        puppeteer: {
+    };
+    if (disableChromiumSandbox) {
+        clientConfig.puppeteer = {
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        },
-    });
+        };
+    }
+    const client = new Client(clientConfig);
 
     client.on('qr', (qr) => {
         console.log('\n[TwinClaw Channels] ══════════════════════════════════════════════════');

@@ -1,19 +1,20 @@
 FROM node:22-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
+ENV NODE_ENV=production
+
+RUN addgroup -S twinbot && adduser -S twinbot -G twinbot
+
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+RUN npm ci --omit=dev --no-audit --no-fund
 
-# Copy project files
 COPY . .
+RUN mkdir -p memory && chown -R twinbot:twinbot /app
 
-# Expose gateway port
+USER twinbot
+
 EXPOSE 18789
 
-# Start the application
 CMD ["npm", "start"]

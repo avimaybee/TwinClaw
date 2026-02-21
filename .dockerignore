@@ -1,0 +1,17 @@
+.git
+.gitignore
+.gitattributes
+node_modules
+coverage
+memory
+dist
+*.db
+*.log
+.env
+.env.*
+conductor
+tests
+vitest-result*.json
+out*.json
+out*.txt
+failures*.txt

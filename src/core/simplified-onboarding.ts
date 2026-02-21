@@ -77,13 +77,24 @@ async function runWhatsAppQRLogin(): Promise<boolean> {
     return new Promise((resolve) => {
       console.log('\n📱 Starting WhatsApp QR Login...\n');
 
-      const client = new Client({
+      const disableChromiumSandbox = process.env.WHATSAPP_DISABLE_CHROMIUM_SANDBOX === 'true';
+      const clientOptions: {
+        authStrategy: InstanceType<typeof LocalAuth>;
+        puppeteer: {
+          headless: boolean;
+          args?: string[];
+        };
+      } = {
         authStrategy: new LocalAuth({ dataPath: './memory/whatsapp_auth' }),
         puppeteer: {
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
           headless: true,
         },
-      });
+      };
+      if (disableChromiumSandbox) {
+        clientOptions.puppeteer.args = ['--no-sandbox', '--disable-setuid-sandbox'];
+      }
+
+      const client = new Client(clientOptions);
 
       client.on('qr', (qr: string) => {
         console.clear();

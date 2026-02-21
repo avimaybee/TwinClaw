@@ -110,3 +110,39 @@ Example:
 
 ## 6. Security Note
 Never manually insert secret keys directly into `twinclaw.json` without first securing directory and file ACLs for the current Windows user account. Even then, managing credentials via the Secret Vault command-line integration is the only approved methodology.
+
+### 6.1 Signed Control-Plane Endpoints
+
+All control-plane HTTP routes except `/health`, `/health/live`, and `/health/ready` now require an `X-Signature` header:
+
+`X-Signature: sha256=<HMAC_SHA256(raw_request_body, API_SECRET)>`
+
+This prevents unauthorized local process access to sensitive routes such as logs, restore, browser controls, and system halt.
+
+### 6.2 Browser Navigation SSRF Guard
+
+Browser snapshot navigation is restricted by `BROWSER_ALLOWED_HOSTS` (comma-separated hostnames, wildcard `*.domain.com` supported). Requests to localhost, loopback, and private-network hosts are blocked.
+
+Example:
+
+```powershell
+$env:BROWSER_ALLOWED_HOSTS = "example.com,*.trusted.internal"
+```
+
+### 6.3 API Bind Host
+
+Control Plane now binds to loopback by default:
+
+```powershell
+$env:API_BIND_HOST = "127.0.0.1"
+```
+
+Set this explicitly only when you intentionally need remote network exposure.
+
+### 6.4 WhatsApp Chromium Sandbox
+
+WhatsApp automation now keeps Chromium sandboxing enabled by default. Only disable sandbox in tightly isolated environments:
+
+```powershell
+$env:WHATSAPP_DISABLE_CHROMIUM_SANDBOX = "true"
+```

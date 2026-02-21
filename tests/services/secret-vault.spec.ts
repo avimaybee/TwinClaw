@@ -48,6 +48,24 @@ describe('SecretVaultService', () => {
     expect(service.readSecret('API_SECRET')).toBe(rawValue);
   });
 
+  it('persists a unique PBKDF2 salt in vault metadata', () => {
+    service.setSecret({
+      name: 'API_SECRET',
+      value: 'salt-check-secret-value',
+      scope: 'api',
+      required: true,
+      rotationWindowHours: 24,
+      warningWindowHours: 6,
+    });
+
+    const meta = db
+      .prepare('SELECT value FROM secret_vault_meta WHERE key = ?')
+      .get('master_key_salt') as { value: string } | undefined;
+
+    expect(meta).toBeDefined();
+    expect(Buffer.from(meta!.value, 'base64').length).toBeGreaterThanOrEqual(16);
+  });
+
   it('keeps previous value active when rotation fails mid-transaction', () => {
     service.setSecret({
       name: 'API_SECRET',

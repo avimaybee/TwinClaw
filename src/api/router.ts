@@ -22,7 +22,7 @@ import {
     type PersonaStateDeps,
 } from './handlers/persona-state.js';
 import { handleConfigValidate } from './handlers/config-validate.js';
-import { requestLogger, requireSignature, sendError } from './shared.js';
+import { requestLogger, requireSignature, sendError, sendOk, setRawRequestBody } from './shared.js';
 import { BrowserService } from '../services/browser-service.js';
 import type { SkillRegistry } from '../services/skill-registry.js';
 import type { McpServerManager } from '../services/mcp-server-manager.js';
@@ -36,7 +36,6 @@ import type { ModelRouter } from '../services/model-router.js';
 import { getPersonaStateService } from '../services/persona-state.js';
 import { logThought } from '../utils/logger.js';
 import { getCallbackOutcomeCounts } from '../services/db.js';
-import { sendOk } from './shared.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { WsHub } from './websocket-hub.js';
@@ -56,6 +55,7 @@ export interface ApiServerDeps {
 }
 
 const DEFAULT_PORT = 18789;
+const DEFAULT_BIND_HOST = '127.0.0.1';
 
 /**
  * Create and start the Control Plane HTTP API server.
@@ -87,6 +87,7 @@ const DEFAULT_PORT = 18789;
 export function startApiServer(deps: ApiServerDeps): void {
     const app = express();
     const port = Number(getConfigValue('API_PORT')) || DEFAULT_PORT;
+    const bindHost = (getConfigValue('API_BIND_HOST') ?? DEFAULT_BIND_HOST).trim() || DEFAULT_BIND_HOST;
     const server = createServer(app);
 
     // Attach WebSocket hub if provided
@@ -95,7 +96,11 @@ export function startApiServer(deps: ApiServerDeps): void {
     }
 
     // ── Global Middleware ───────────────────────────────────────────────────────
-    app.use(express.json());
+    app.use(express.json({
+        verify: (req, _res, buf) => {
+            setRawRequestBody(req, buf);
+        },
+    }));
     app.use(requestLogger);
 
     // ── Shared Services ─────────────────────────────────────────────────────────
@@ -122,6 +127,8 @@ export function startApiServer(deps: ApiServerDeps): void {
     app.get('/health', handleHealth(healthDeps));
     app.get('/health/live', handleLiveness());
     app.get('/health/ready', handleReadiness(healthDeps));
+    app.use(requireSignature);
+
     app.get('/config/validate', handleConfigValidate());
     app.get('/backup/diagnostics', handleLocalStateBackupDiagnostics(localStateBackupDeps));
     app.post('/backup/snapshot', handleLocalStateCreateSnapshot(localStateBackupDeps));
@@ -165,7 +172,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             : 100;
         sendOk(res, { events: deps.budgetGovernor.getRecentEvents(limit) });
     });
-    app.post('/budget/profile', requireSignature, (req, res) => {
+    app.post('/budget/profile', (req, res) => {
         if (!deps.budgetGovernor) {
             sendError(res, 'Runtime budget governor not initialized.', 503);
             return;
@@ -193,7 +200,7 @@ export function startApiServer(deps: ApiServerDeps): void {
             snapshot: deps.budgetGovernor.getSnapshot(typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined),
         });
     });
-    app.post('/budget/reset', requireSignature, (req, res) => {
+    app.post('/budget/reset', (req, res) => {
         if (!deps.budgetGovernor) {
             sendError(res, 'Runtime budget governor not initialized.', 503);
             return;
@@ -213,7 +220,7 @@ export function startApiServer(deps: ApiServerDeps): void {
         }
         sendOk(res, deps.modelRouter.getHealthSnapshot());
     });
-    app.post('/routing/mode', requireSignature, (req, res) => {
+    app.post('/routing/mode', (req, res) => {
         if (!deps.modelRouter) {
             sendError(res, 'Model router not initialized.', 503);
             return;
@@ -313,9 +320,9 @@ export function startApiServer(deps: ApiServerDeps): void {
     app.put('/persona/state', handlePersonaStateUpdate(personaStateDeps));
     app.post('/browser/snapshot', handleBrowserSnapshot(browserDeps));
     app.post('/browser/click', handleBrowserClick(browserDeps));
-    app.post('/callback/webhook', requireSignature, handleWebhookCallback(callbackDeps));
+    app.post('/callback/webhook', handleWebhookCallback(callbackDeps));
 
-    app.post('/system/halt', requireSignature, (_req, res) => {
+    app.post('/system/halt', (_req, res) => {
         void logThought('[API] Received /system/halt request from Control Plane GUI. Halting node process.');
         sendOk(res, { message: 'Agent halting...' });
         // Give the response a moment to flush before killing process
@@ -336,8 +343,8 @@ export function startApiServer(deps: ApiServerDeps): void {
     });
 
     // ── Start ──────────────────────────────────────────────────────────────────
-    server.listen(port, () => {
-        console.log(`[TwinClaw API] Control plane listening on http://localhost:${port}`);
-        void logThought(`[API] HTTP server started on port ${port}.`);
+    server.listen(port, bindHost, () => {
+        console.log(`[TwinClaw API] Control plane listening on http://${bindHost}:${port}`);
+        void logThought(`[API] HTTP server started on ${bindHost}:${port}.`);
     });
 }

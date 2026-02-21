@@ -26,6 +26,19 @@ const mockGateway = {
     processText: vi.fn().mockResolvedValue('ok')
 };
 
+function stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') {
+        const serialized = JSON.stringify(value);
+        return serialized ?? 'null';
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+    }
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`;
+}
+
 describe('POST /callback/webhook', () => {
     let app: Express;
     const API_SECRET = 'test-secret';
@@ -89,6 +102,26 @@ describe('POST /callback/webhook', () => {
 
         // Ensure receipt was recorded
         expect(recordCallbackReceipt).toHaveBeenCalledWith('task-1:test:completed', 202, 'accepted');
+    });
+
+    it('accepts canonical signatures with reordered JSON keys', async () => {
+        const payload = {
+            taskId: 'task-canonical',
+            status: 'completed',
+            eventType: 'test',
+            result: { z: 1, a: 2 },
+        };
+        const canonicalSignature = `sha256=${createHmac('sha256', API_SECRET)
+            .update(stableStringify(payload))
+            .digest('hex')}`;
+
+        const response = await request(app)
+            .post('/callback/webhook')
+            .set('x-signature', canonicalSignature)
+            .send(payload);
+
+        expect(response.status).toBe(202);
+        expect(response.body.ok).toBe(true);
     });
 
     it('short-circuits identical duplicate requests (idempotency)', async () => {

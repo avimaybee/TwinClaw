@@ -30,7 +30,7 @@ function App() {
       setTimeout(() => setHaltState('idle'), 3000);
     } else if (haltState === 'confirm') {
       setHaltState('halting');
-      TwinClawApi.haltSystem('local-gui-override').catch((err) => {
+      TwinClawApi.haltSystem().catch((err) => {
         console.error('Halt failed:', err);
         setHaltState('idle');
       });

@@ -10,6 +10,97 @@ import { sendOk, sendError, mapError } from '../shared.js';
 import { logThought } from '../../utils/logger.js';
 import path from 'node:path';
 
+const DEFAULT_BROWSER_ALLOWED_HOSTS = ['example.com'];
+
+function resolveAllowedBrowserHosts(): string[] {
+    const configured = (process.env.BROWSER_ALLOWED_HOSTS ?? '')
+        .split(',')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean);
+    return configured.length > 0 ? configured : DEFAULT_BROWSER_ALLOWED_HOSTS;
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+    const match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!match) {
+        return false;
+    }
+    const octets = match.slice(1).map((value) => Number(value));
+    if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) {
+        return false;
+    }
+    const [a, b] = octets;
+    return (
+        a === 10 ||
+        a === 127 ||
+        a === 0 ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168)
+    );
+}
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+    const normalized = hostname.toLowerCase();
+    if (
+        normalized === 'localhost' ||
+        normalized.endsWith('.localhost') ||
+        normalized.endsWith('.local') ||
+        normalized === '::1' ||
+        normalized === '::' ||
+        normalized.startsWith('fe80:') ||
+        normalized.startsWith('fc') ||
+        normalized.startsWith('fd')
+    ) {
+        return true;
+    }
+    return isPrivateIpv4(normalized);
+}
+
+function hostMatchesAllowRule(hostname: string, rule: string): boolean {
+    if (rule === '*') {
+        return true;
+    }
+    if (rule.startsWith('*.')) {
+        const suffix = rule.slice(2);
+        return hostname === suffix || hostname.endsWith(`.${suffix}`);
+    }
+    return hostname === rule;
+}
+
+function validateNavigationUrl(inputUrl: string): { ok: true; url: string } | { ok: false; status: number; error: string } {
+    let parsed: URL;
+    try {
+        parsed = new URL(inputUrl);
+    } catch {
+        return { ok: false, status: 400, error: 'Field "url" must be a valid absolute URL.' };
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { ok: false, status: 400, error: 'Only http:// and https:// URLs are allowed.' };
+    }
+    if (parsed.username || parsed.password) {
+        return { ok: false, status: 400, error: 'URLs with embedded credentials are not allowed.' };
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (isPrivateOrLocalHost(hostname)) {
+        return { ok: false, status: 403, error: 'Navigation to local or private-network hosts is blocked.' };
+    }
+
+    const allowedHosts = resolveAllowedBrowserHosts();
+    const hostAllowed = allowedHosts.some((rule) => hostMatchesAllowRule(hostname, rule));
+    if (!hostAllowed) {
+        return {
+            ok: false,
+            status: 403,
+            error: `Host '${hostname}' is not in BROWSER_ALLOWED_HOSTS allowlist.`,
+        };
+    }
+
+    return { ok: true, url: parsed.toString() };
+}
+
 export interface BrowserDeps {
     browserService: BrowserService;
 }
@@ -40,8 +131,14 @@ export function handleBrowserSnapshot(deps: BrowserDeps) {
             }
 
             if (body.url) {
-                await deps.browserService.navigate(body.url);
-                await logThought(`[API] Browser navigated to: ${body.url}`);
+                const validatedUrl = validateNavigationUrl(body.url);
+                if (!validatedUrl.ok) {
+                    sendError(res, validatedUrl.error, validatedUrl.status);
+                    return;
+                }
+
+                await deps.browserService.navigate(validatedUrl.url);
+                await logThought(`[API] Browser navigated to: ${validatedUrl.url}`);
             }
 
             const screenshotPath = path.resolve('memory', `snapshot_${Date.now()}.png`);

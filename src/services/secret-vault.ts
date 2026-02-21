@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes, randomUUID } from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
 import * as dbModule from './db.js';
 import type {
@@ -18,6 +18,11 @@ const DEFAULT_ROTATION_WINDOW_HOURS = 24 * 30;
 const DEFAULT_WARNING_WINDOW_HOURS = 24 * 3;
 const DEFAULT_REQUIRED_SECRETS = ['API_SECRET'];
 const MIN_REDACTION_VALUE_LENGTH = 6;
+const MASTER_KEY_DERIVATION_ITERATIONS = 210_000;
+const MASTER_KEY_DERIVATION_DIGEST = 'sha512';
+const MASTER_KEY_DERIVATION_BYTES = 32;
+const MASTER_KEY_SALT_BYTES_MIN = 16;
+const MASTER_KEY_META_SALT_KEY = 'master_key_salt';
 
 const SENSITIVE_ENV_NAME_PATTERN = /(api[_-]?key|token|secret|password)/i;
 
@@ -114,8 +119,32 @@ function deriveExpiryIso(nowMs: number, rotationWindowHours: number, explicitExp
   return new Date(nowMs + rotationWindowHours * 60 * 60 * 1000).toISOString();
 }
 
-function deriveMasterKey(raw: string): Buffer {
+function deriveMasterKey(raw: string, salt: Buffer): Buffer {
+  return pbkdf2Sync(
+    raw,
+    salt,
+    MASTER_KEY_DERIVATION_ITERATIONS,
+    MASTER_KEY_DERIVATION_BYTES,
+    MASTER_KEY_DERIVATION_DIGEST,
+  );
+}
+
+function deriveLegacyMasterKey(raw: string): Buffer {
   return createHash('sha256').update(raw).digest();
+}
+
+function decodeMasterKeySalt(value: string): Buffer {
+  const normalized = value.trim();
+  if (!/^[A-Za-z0-9+/=]+$/.test(normalized)) {
+    throw new Error('SECRET_VAULT_MASTER_SALT must be base64 encoded.');
+  }
+  const decoded = Buffer.from(normalized, 'base64');
+  if (decoded.length < MASTER_KEY_SALT_BYTES_MIN) {
+    throw new Error(
+      `SECRET_VAULT_MASTER_SALT must decode to at least ${MASTER_KEY_SALT_BYTES_MIN} bytes.`,
+    );
+  }
+  return decoded;
 }
 
 function splitRequiredSecrets(value: string | undefined): string[] {
@@ -144,6 +173,8 @@ export class SecretVaultService {
   private readonly explicitMasterKey?: string;
   private readonly db: BetterSqlite3.Database | null;
   private cachedMasterKey: Buffer | null = null;
+  private cachedLegacyMasterKey: Buffer | null = null;
+  private cachedMasterKeySalt: Buffer | null = null;
   private tablesReady = false;
 
   constructor(options: SecretVaultServiceOptions = {}) {
@@ -649,6 +680,13 @@ export class SecretVaultService {
     }
 
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS secret_vault_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS secret_vault_registry (
         name TEXT PRIMARY KEY,
         scope TEXT NOT NULL,
@@ -707,11 +745,7 @@ export class SecretVaultService {
     return this.db;
   }
 
-  private resolveMasterKey(): Buffer {
-    if (this.cachedMasterKey) {
-      return this.cachedMasterKey;
-    }
-
+  private resolveMasterKeySource(): string {
     const source =
       this.explicitMasterKey ??
       getConfigValue('SECRET_VAULT_MASTER_KEY', true) ??
@@ -721,9 +755,72 @@ export class SecretVaultService {
         'Missing SECRET_VAULT_MASTER_KEY (or API_SECRET fallback) for secret encryption.',
       );
     }
+    return source;
+  }
 
-    this.cachedMasterKey = deriveMasterKey(source);
+  private resolveMasterKeySalt(): Buffer {
+    if (this.cachedMasterKeySalt) {
+      return this.cachedMasterKeySalt;
+    }
+
+    const configuredSalt = getConfigValue('SECRET_VAULT_MASTER_SALT', true);
+    if (configuredSalt) {
+      this.cachedMasterKeySalt = decodeMasterKeySalt(configuredSalt);
+      return this.cachedMasterKeySalt;
+    }
+
+    if (!this.db) {
+      throw new Error(
+        'Missing SECRET_VAULT_MASTER_SALT and vault database is unavailable to persist a unique salt.',
+      );
+    }
+
+    this.ensureTables();
+    const existing = this.db
+      .prepare(
+        `SELECT value
+         FROM secret_vault_meta
+         WHERE key = ?`,
+      )
+      .get(MASTER_KEY_META_SALT_KEY) as { value: string } | undefined;
+
+    if (existing?.value) {
+      this.cachedMasterKeySalt = decodeMasterKeySalt(existing.value);
+      return this.cachedMasterKeySalt;
+    }
+
+    const generatedSalt = randomBytes(MASTER_KEY_SALT_BYTES_MIN).toString('base64');
+    const nowIso = this.now().toISOString();
+    this.db.prepare(
+      `INSERT INTO secret_vault_meta (
+        key,
+        value,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?)`,
+    ).run(MASTER_KEY_META_SALT_KEY, generatedSalt, nowIso, nowIso);
+    this.cachedMasterKeySalt = Buffer.from(generatedSalt, 'base64');
+    return this.cachedMasterKeySalt;
+  }
+
+  private resolveMasterKey(): Buffer {
+    if (this.cachedMasterKey) {
+      return this.cachedMasterKey;
+    }
+
+    const source = this.resolveMasterKeySource();
+    const salt = this.resolveMasterKeySalt();
+    this.cachedMasterKey = deriveMasterKey(source, salt);
     return this.cachedMasterKey;
+  }
+
+  private resolveLegacyMasterKey(): Buffer {
+    if (this.cachedLegacyMasterKey) {
+      return this.cachedLegacyMasterKey;
+    }
+    const source = this.resolveMasterKeySource();
+    this.cachedLegacyMasterKey = deriveLegacyMasterKey(source);
+    return this.cachedLegacyMasterKey;
   }
 
   private encrypt(value: string): SecretEncryptedValue {
@@ -740,17 +837,26 @@ export class SecretVaultService {
   }
 
   private decrypt(payload: SecretEncryptedValue): string {
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      this.resolveMasterKey(),
-      Buffer.from(payload.iv, 'base64'),
-    );
-    decipher.setAuthTag(Buffer.from(payload.authTag, 'base64'));
-    const plain = Buffer.concat([
-      decipher.update(Buffer.from(payload.ciphertext, 'base64')),
-      decipher.final(),
-    ]);
-    return plain.toString('utf8');
+    const iv = Buffer.from(payload.iv, 'base64');
+    const authTag = Buffer.from(payload.authTag, 'base64');
+    const ciphertext = Buffer.from(payload.ciphertext, 'base64');
+
+    const decryptWithKey = (key: Buffer): string => {
+      const decipher = createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      return plain.toString('utf8');
+    };
+
+    try {
+      return decryptWithKey(this.resolveMasterKey());
+    } catch (primaryError) {
+      try {
+        return decryptWithKey(this.resolveLegacyMasterKey());
+      } catch {
+        throw primaryError;
+      }
+    }
   }
 
   private readVaultSecretValue(name: string): string | null {

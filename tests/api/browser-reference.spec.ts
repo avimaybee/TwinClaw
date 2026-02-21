@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express, { type Express } from 'express';
 import request from 'supertest';
 import {
@@ -14,6 +14,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 
 describe('browser reference API handlers', () => {
   let app: Express;
+  let previousAllowedHosts: string | undefined;
   let browserService: {
     navigate: ReturnType<typeof vi.fn>;
     takeScreenshotForVlm: ReturnType<typeof vi.fn>;
@@ -25,6 +26,9 @@ describe('browser reference API handlers', () => {
   };
 
   beforeEach(() => {
+    previousAllowedHosts = process.env.BROWSER_ALLOWED_HOSTS;
+    process.env.BROWSER_ALLOWED_HOSTS = 'example.com';
+
     browserService = {
       navigate: vi.fn().mockResolvedValue(undefined),
       takeScreenshotForVlm: vi.fn().mockResolvedValue({
@@ -65,6 +69,14 @@ describe('browser reference API handlers', () => {
     app.post('/browser/click', handleBrowserClick({ browserService: browserService as any }));
   });
 
+  afterEach(() => {
+    if (previousAllowedHosts === undefined) {
+      delete process.env.BROWSER_ALLOWED_HOSTS;
+      return;
+    }
+    process.env.BROWSER_ALLOWED_HOSTS = previousAllowedHosts;
+  });
+
   it('returns snapshot reference map and snapshotId', async () => {
     const response = await request(app)
       .post('/browser/snapshot')
@@ -90,6 +102,17 @@ describe('browser reference API handlers', () => {
       ref: 'ref-001',
       snapshotId: 'snapshot-abc',
     });
+  });
+
+  it('rejects browser navigation to localhost targets', async () => {
+    const response = await request(app)
+      .post('/browser/snapshot')
+      .send({ url: 'http://127.0.0.1:3000' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error).toContain('private-network');
+    expect(browserService.navigate).not.toHaveBeenCalled();
   });
 
   it('returns stale snapshot diagnostics when reference context expires', async () => {

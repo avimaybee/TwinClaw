@@ -178,17 +178,74 @@ export class ApiRequestError extends Error {
 }
 
 const API_BASE_URL = 'http://localhost:3100';
+const GUI_API_SECRET = String(import.meta.env.VITE_API_SECRET ?? '').trim();
+const UNSIGNED_CONTROL_PLANE_PATHS = new Set(['/health', '/health/live', '/health/ready']);
+let cachedSignatureKey: Promise<CryptoKey> | null = null;
+
+function isSignedControlPlanePath(path: string): boolean {
+    const [pathname] = path.split('?');
+    return !UNSIGNED_CONTROL_PLANE_PATHS.has(pathname);
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+    return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function getSignatureKey(): Promise<CryptoKey> {
+    if (!GUI_API_SECRET) {
+        throw new Error('Missing VITE_API_SECRET for signed control-plane requests.');
+    }
+    if (!globalThis.crypto?.subtle) {
+        throw new Error('Web Crypto API is unavailable for request signing.');
+    }
+    if (!cachedSignatureKey) {
+        const encoder = new TextEncoder();
+        cachedSignatureKey = globalThis.crypto.subtle.importKey(
+            'raw',
+            encoder.encode(GUI_API_SECRET),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign'],
+        );
+    }
+    return cachedSignatureKey;
+}
+
+async function buildSignature(payload: string): Promise<string> {
+    const key = await getSignatureKey();
+    const digest = await globalThis.crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+    return `sha256=${bytesToHex(new Uint8Array(digest))}`;
+}
+
+function resolveBodyForSignature(path: string, init?: RequestInit): string {
+    if (!isSignedControlPlanePath(path)) {
+        return '';
+    }
+    if (init?.body === undefined || init.body === null) {
+        return '';
+    }
+    if (typeof init.body === 'string') {
+        return init.body;
+    }
+    throw new Error('Signed API requests must use string request bodies.');
+}
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
     try {
         const headers = new Headers(init?.headers ?? {});
+        const method = (init?.method ?? 'GET').toUpperCase();
         headers.set('Accept', 'application/json');
         if (init?.body && !headers.has('Content-Type')) {
             headers.set('Content-Type', 'application/json');
         }
+        if (isSignedControlPlanePath(path) && !headers.has('x-signature')) {
+            const payload = resolveBodyForSignature(path, init);
+            const signature = await buildSignature(payload);
+            headers.set('x-signature', signature);
+        }
 
         const response = await fetch(`${API_BASE_URL}${path}`, {
-            method: init?.method ?? 'GET',
+            method,
             headers,
             body: init?.body,
         });
@@ -220,10 +277,9 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
 export const TwinClawApi = {
     getHealth: () => fetchApi<SystemHealth>('/health'),
     getRoutingTelemetry: () => fetchApi<ModelRoutingTelemetry>('/routing/telemetry'),
-    setRoutingMode: (mode: ModelRoutingFallbackMode, signature = 'local-gui-override') =>
+    setRoutingMode: (mode: ModelRoutingFallbackMode) =>
         fetchApi<{ message: string; snapshot: ModelRoutingTelemetry }>('/routing/mode', {
             method: 'POST',
-            headers: { 'x-signature': signature },
             body: JSON.stringify({ mode }),
         }),
     getReliability: () => fetchApi<ReliabilityData>('/reliability'),
@@ -236,10 +292,8 @@ export const TwinClawApi = {
             method: 'PUT',
             body: JSON.stringify(payload),
         }),
-    haltSystem: (signature: string) => fetch(`${API_BASE_URL}/system/halt`, {
-        method: 'POST',
-        headers: { 'x-signature': signature }
-    }).then(async r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    }),
+    haltSystem: () =>
+        fetchApi<{ message: string }>('/system/halt', {
+            method: 'POST',
+        }).then(() => undefined),
 };

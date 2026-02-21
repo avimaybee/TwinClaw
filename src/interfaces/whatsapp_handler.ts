@@ -15,12 +15,18 @@ export class WhatsAppHandler {
     #lastMessageAt: number = 0;
 
     constructor() {
-        this.#client = new Client({
+        const disableChromiumSandbox = process.env.WHATSAPP_DISABLE_CHROMIUM_SANDBOX === 'true';
+        const clientConfig: WAWebJS.ClientOptions = {
             authStrategy: new LocalAuth({ dataPath: './memory/whatsapp_auth' }),
-            puppeteer: {
+        };
+
+        if (disableChromiumSandbox) {
+            clientConfig.puppeteer = {
                 args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            }
-        });
+            };
+        }
+
+        this.#client = new Client(clientConfig);
 
         this.#registerListeners();
     }

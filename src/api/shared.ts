@@ -4,6 +4,60 @@ import type { ApiEnvelope } from '../types/api.js';
 import { logThought, scrubSensitiveText } from '../utils/logger.js';
 import { getSecretVaultService } from '../services/secret-vault.js';
 
+type SignatureRequest = Request & { rawBody?: string };
+
+function stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') {
+        const serialized = JSON.stringify(value);
+        return serialized ?? 'null';
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+    }
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+    const entries = keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
+    return `{${entries.join(',')}}`;
+}
+
+function getSignaturePayloadCandidates(req: Request): string[] {
+    const payloads = new Set<string>();
+    const rawBody = (req as SignatureRequest).rawBody;
+    if (typeof rawBody === 'string') {
+        payloads.add(rawBody);
+    }
+
+    if (req.body === undefined) {
+        payloads.add('');
+        return [...payloads];
+    }
+
+    try {
+        const stringified = JSON.stringify(req.body);
+        if (typeof stringified === 'string') {
+            payloads.add(stringified);
+        }
+    } catch {
+        // JSON parse body should always be stringifiable; ignore defensive fallback.
+    }
+
+    try {
+        payloads.add(stableStringify(req.body));
+    } catch {
+        // Ignore pathological payloads and continue with available candidates.
+    }
+
+    if (payloads.size === 0) {
+        payloads.add('');
+    }
+
+    return [...payloads];
+}
+
+export function setRawRequestBody(req: Request, buffer: Buffer): void {
+    (req as SignatureRequest).rawBody = buffer.toString('utf8');
+}
+
 // ── Response Helpers ────────────────────────────────────────────────────────
 
 /** Send a successful JSON response using the standard envelope. */
@@ -34,37 +88,44 @@ export function sendError(res: Response, message: string, status = 400): void {
 // ── Auth Middleware ──────────────────────────────────────────────────────────
 
 /**
- * Validate the `X-Signature` header on incoming webhook callbacks.
+ * Validate the `X-Signature` header on incoming signed API requests.
  *
  * Expected format: `sha256=<hex digest of HMAC-SHA256(body, API_SECRET)>`
  *
- * If API_SECRET is not configured, all callback requests are rejected.
+ * If API_SECRET is not configured, all signed API requests are rejected.
  */
 export function requireSignature(req: Request, res: Response, next: NextFunction): void {
     const apiSecret = getSecretVaultService().readSecret('API_SECRET') ?? '';
 
     if (!apiSecret) {
-        void logThought('[API] Webhook rejected — API_SECRET not configured.');
-        sendError(res, 'Webhook endpoint not configured (missing API_SECRET).', 503);
+        void logThought('[API] Signed request rejected — API_SECRET not configured.');
+        sendError(res, 'Signed API endpoints are unavailable (missing API_SECRET).', 503);
         return;
     }
 
     const signatureHeader = req.headers['x-signature'];
     if (typeof signatureHeader !== 'string' || !signatureHeader.startsWith('sha256=')) {
-        void logThought('[API] Webhook rejected — missing or malformed X-Signature header.');
+        void logThought('[API] Signed request rejected — missing or malformed X-Signature header.');
         sendError(res, 'Missing or malformed X-Signature header.', 401);
         return;
     }
 
     const providedHex = signatureHeader.slice('sha256='.length);
-    const rawBody = JSON.stringify(req.body);
-    const expectedHex = createHmac('sha256', apiSecret).update(rawBody).digest('hex');
-
+    if (!/^[a-f0-9]{64}$/i.test(providedHex)) {
+        void logThought('[API] Signed request rejected — malformed signature digest.');
+        sendError(res, 'Malformed signature digest.', 401);
+        return;
+    }
     const provided = Buffer.from(providedHex, 'hex');
-    const expected = Buffer.from(expectedHex, 'hex');
+    const payloadCandidates = getSignaturePayloadCandidates(req);
+    const signatureMatches = payloadCandidates.some((payload) => {
+        const expectedHex = createHmac('sha256', apiSecret).update(payload).digest('hex');
+        const expected = Buffer.from(expectedHex, 'hex');
+        return provided.length === expected.length && timingSafeEqual(provided, expected);
+    });
 
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
-        void logThought('[API] Webhook rejected — signature mismatch.');
+    if (!signatureMatches) {
+        void logThought('[API] Signed request rejected — signature mismatch.');
         sendError(res, 'Invalid signature.', 403);
         return;
     }
