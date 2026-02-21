@@ -143,6 +143,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [x] **Track 64: Docs & Track-State Reconciliation**
   *Link: [./archive/docs_track_state_reconciliation_20260221/](./archive/docs_track_state_reconciliation_20260221/)*
+- [x] **Track 66: Windows-Only Documentation Alignment**
+  *Link: [./archive/windows_docs_alignment_20260221/](./archive/windows_docs_alignment_20260221/)*
 
 ---
 
@@ -150,7 +152,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [~] **Track 65: Windows-Only Runtime & CLI Enforcement**
   *Link: [./tracks/windows_runtime_cli_enforcement_20260221/](./tracks/windows_runtime_cli_enforcement_20260221/)*
-- [x] **Track 66: Windows-Only Documentation Alignment**
-  *Link: [./tracks/windows_docs_alignment_20260221/](./tracks/windows_docs_alignment_20260221/)*
 - [~] **Track 67: Windows CI Runner & PowerShell Pipeline Alignment**
   *Link: [./tracks/windows_ci_powershell_alignment_20260221/](./tracks/windows_ci_powershell_alignment_20260221/)*
