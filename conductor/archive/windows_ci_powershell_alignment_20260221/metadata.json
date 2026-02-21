@@ -1,0 +1,11 @@
+{
+  "id": "67",
+  "title": "Windows CI Runner & PowerShell Pipeline Alignment",
+  "description": "Run release-gate CI on Windows and replace bash-dependent workflow scripting with PowerShell equivalents.",
+  "status": "in_progress",
+  "owner": "release",
+  "priority": "high",
+  "created_at": "2026-02-21",
+  "updated_at": "2026-02-21",
+  "labels": ["windows", "ci", "release-gate"]
+}
